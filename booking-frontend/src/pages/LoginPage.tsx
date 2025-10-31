@@ -6,7 +6,8 @@ import * as yup from 'yup';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { authService } from '../services/authService';
+import { authService, api } from '../services/authService';
+import { formatDateTimeDmy } from '../utils/date';
 import type { LoginData } from '../types/auth';
 
 const loginSchema = yup.object({
@@ -20,6 +21,8 @@ export const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sessionMsg, setSessionMsg] = useState('');
+  const [amenities, setAmenities] = useState<Array<{ id: string; name: string; description?: string; imageUrl?: string }>>([]);
+  const [availability, setAvailability] = useState<Record<string, { status: 'free' | 'booked' | 'closed'; freeUntil?: string | null; nextAvailable?: string | null; availableForDays?: number | null }>>({});
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -35,6 +38,29 @@ export const LoginPage: React.FC = () => {
     // Clear the one-shot flag so direct visits won't show it
     try { sessionStorage.removeItem('sessionExpired'); } catch {}
   }, [location.search]);
+
+  // Load public amenities and availability for landing page
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [amenitiesRes, availabilityRes] = await Promise.all([
+          api.get('/amenities'),
+          api.get('/amenities/availability'),
+        ]);
+        if (!mounted) return;
+        const ams = (amenitiesRes.data || []).map((a: any) => ({ id: a.id, name: a.name, description: a.description, imageUrl: a.imageUrl }));
+        setAmenities(ams);
+        const availById: Record<string, any> = {};
+        for (const row of availabilityRes.data || []) {
+          availById[row.id] = { status: row.status, freeUntil: row.freeUntil, nextAvailable: row.nextAvailable, availableForDays: row.availableForDays };
+        }
+        setAvailability(availById);
+      } catch {}
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
 
   const {
     register,
@@ -67,6 +93,51 @@ export const LoginPage: React.FC = () => {
         <p className="mt-2 text-center text-sm text-gray-600">
           Welcome back to our booking platform
         </p>
+      </div>
+
+      {/* Public Amenity Availability */}
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md space-y-4">
+        {amenities.map((a) => {
+          const v = availability[a.id];
+          const isFree = v?.status === 'free';
+          const isBooked = v?.status === 'booked';
+          const isClosed = v?.status === 'closed';
+          return (
+            <Card key={a.id}>
+              <div className="flex items-start space-x-3">
+                {a.imageUrl ? (
+                  <img src={a.imageUrl} alt={a.name} className="w-12 h-12 rounded object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded bg-gray-200 flex items-center justify-center text-gray-500 text-xs flex-shrink-0">Img</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-medium text-gray-900 truncate">{a.name}</h3>
+                    {isFree && <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded">Free</span>}
+                    {isBooked && <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded">Booked</span>}
+                    {isClosed && <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">Closed</span>}
+                  </div>
+                  {a.description && (
+                    <p className="mt-1 text-sm text-gray-600 line-clamp-2">{a.description}</p>
+                  )}
+                  <p className="mt-2 text-sm text-gray-700">
+                    {isFree && v?.availableForDays ? (
+                      <>Currently free — available for the next <span className="font-medium">{v.availableForDays}</span> days</>
+                    ) : isFree ? (
+                      <>Currently free — available until <span className="font-medium">{v?.freeUntil ? formatDateTimeDmy(v.freeUntil) : ''}</span></>
+                    ) : null}
+                    {isBooked && (
+                      <>Currently booked — next available <span className="font-medium">{v?.nextAvailable ? formatDateTimeDmy(v.nextAvailable) : 'No free slots within window'}</span></>
+                    )}
+                    {isClosed && (
+                      <>Closed now — opens at <span className="font-medium">{v?.nextAvailable ? formatDateTimeDmy(v.nextAvailable) : ''}</span></>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

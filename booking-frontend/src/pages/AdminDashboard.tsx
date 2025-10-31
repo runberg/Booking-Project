@@ -7,6 +7,7 @@ import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { Users, LogOut, Trash2, Mail } from 'lucide-react';
 import { AmenitiesAdmin } from './AmenitiesAdmin';
 import { authService, api } from '../services/authService';
+import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
 
 interface User {
   id: string;
@@ -64,6 +65,11 @@ export const AdminDashboard: React.FC = () => {
   const [logsSortBy, setLogsSortBy] = useState('createdAt');
   const [logsSortDir, setLogsSortDir] = useState<'ASC' | 'DESC'>('DESC');
   const [logsFilters, setLogsFilters] = useState<{ action?: string; userEmail?: string; userName?: string; amenityName?: string; building?: string; apartmentNumber?: string; date?: string; startTime?: string; slotLength?: string; dateFrom?: string; dateTo?: string }>({});
+
+  // Users tab sorting and search
+  const [usersSortBy, setUsersSortBy] = useState<'name' | 'email' | 'building' | 'role' | 'isEmailVerified' | 'createdAt'>('createdAt');
+  const [usersSortDir, setUsersSortDir] = useState<'ASC' | 'DESC'>('DESC');
+  const [usersQuery, setUsersQuery] = useState<string>('');
 
   useEffect(() => {
     fetchUsers();
@@ -330,6 +336,24 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
+          <div className="mb-4">
+            <div className="flex items-center space-x-2">
+              <input
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                placeholder="Search users by name, email, building, apartment, role..."
+                value={usersQuery}
+                onChange={(e) => setUsersQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // no-op; filtering is live, but keep behavior consistent with logs
+                    setUsersQuery((s) => s.trim());
+                  }
+                }}
+              />
+              <Button variant="secondary" onClick={() => setUsersQuery((s) => s.trim())}>Search</Button>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
@@ -340,19 +364,54 @@ export const AdminDashboard: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      onClick={() => {
+                        const key: typeof usersSortBy = 'name';
+                        const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
+                        setUsersSortBy(key); setUsersSortDir(dir);
+                      }}
+                    >
                       User
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      onClick={() => {
+                        const key: typeof usersSortBy = 'building';
+                        const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
+                        setUsersSortBy(key); setUsersSortDir(dir);
+                      }}
+                    >
                       Building
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      onClick={() => {
+                        const key: typeof usersSortBy = 'isEmailVerified';
+                        const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
+                        setUsersSortBy(key); setUsersSortDir(dir);
+                      }}
+                    >
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      onClick={() => {
+                        const key: typeof usersSortBy = 'role';
+                        const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
+                        setUsersSortBy(key); setUsersSortDir(dir);
+                      }}
+                    >
                       Role
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      onClick={() => {
+                        const key: typeof usersSortBy = 'createdAt';
+                        const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
+                        setUsersSortBy(key); setUsersSortDir(dir);
+                      }}
+                    >
                       Created
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -361,7 +420,39 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
+                  {users
+                    .filter((u) => {
+                      const q = usersQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        (u.name || '').toLowerCase().includes(q) ||
+                        (u.email || '').toLowerCase().includes(q) ||
+                        (u.building || '').toLowerCase().includes(q) ||
+                        (u.apartmentNumber || '').toLowerCase().includes(q) ||
+                        (u.role || '').toLowerCase().includes(q) ||
+                        (u.isEmailVerified ? 'verified' : 'pending').includes(q)
+                      );
+                    })
+                    .sort((a, b) => {
+                      const dir = usersSortDir === 'ASC' ? 1 : -1;
+                      const val = (key: typeof usersSortBy) => {
+                        switch (key) {
+                          case 'name': return (a.name || '').localeCompare(b.name || '');
+                          case 'email': return (a.email || '').localeCompare(b.email || '');
+                          case 'building': {
+                            const ab = `${a.building || ''} ${a.apartmentNumber || ''}`;
+                            const bb = `${b.building || ''} ${b.apartmentNumber || ''}`;
+                            return ab.localeCompare(bb);
+                          }
+                          case 'role': return (a.role || '').localeCompare(b.role || '');
+                          case 'isEmailVerified': return Number(a.isEmailVerified) - Number(b.isEmailVerified);
+                          case 'createdAt': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                          default: return 0;
+                        }
+                      };
+                      return dir * val(usersSortBy);
+                    })
+                    .map((user) => (
                     <tr key={user.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -392,7 +483,7 @@ export const AdminDashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.createdAt).toLocaleDateString()}
+                        {formatDateTimeDmy(user.createdAt).split(' ')[0]}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -618,10 +709,10 @@ export const AdminDashboard: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {logs.map((l) => (
                       <tr key={l.id}>
-                        <td className="px-4 py-2 text-sm text-gray-700">{new Date(l.createdAt).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{formatDateTimeDmy(l.createdAt)}</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{l.action}</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{l.amenityName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{new Date(l.date).toLocaleDateString()}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{formatIsoDateToDmy(l.date)}</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{l.startTime}</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{l.slotLength} min</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{l.userName}</td>

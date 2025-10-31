@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { api, authService } from '../services/authService';
+import { formatIsoDateToDmy } from '../utils/date';
 
 type AmenityPublic = {
   id: string;
@@ -215,12 +216,31 @@ export const BookingPage: React.FC = () => {
     setIsSubmitting(true);
     setInfoMessage('');
     try {
-      await api.post('/bookings', {
+      const { data: created } = await api.post('/bookings', {
         amenityId: selected.id,
         date: selectedDate,
         startTime: selectedTime,
         slotLength: selected.slotLength,
       });
+      if (currentUser?.role === 'admin' || currentUser?.role === 'super') {
+        setUpcoming((prev) => {
+          const next = [
+            ...prev,
+            {
+              id: created.id,
+              amenityName: selected.name,
+              date: selectedDate,
+              startTime: selectedTime,
+              slotLength: selected.slotLength,
+              userName: currentUser?.name || '',
+              building: currentUser?.building || '',
+              apartmentNumber: currentUser?.apartmentNumber || '',
+            },
+          ];
+          next.sort((a, b) => (a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date)));
+          return next.slice(0, 10);
+        });
+      }
       // refresh my bookings
       const mine = await api.get('/bookings/me');
       setMyBookings(mine.data);
@@ -241,6 +261,9 @@ export const BookingPage: React.FC = () => {
   const deleteBooking = async (id: string) => {
     try {
       await api.delete(`/bookings/${id}`);
+      if (currentUser?.role === 'admin' || currentUser?.role === 'super') {
+        setUpcoming((prev) => prev.filter((u) => u.id !== id));
+      }
       const mine = await api.get('/bookings/me');
       setMyBookings(mine.data);
       await refreshUpcomingIfAdmin();
@@ -277,7 +300,7 @@ export const BookingPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="sr-only">Book an Amenity</h1>
 
-        {currentUser?.role === 'admin' && (
+        {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
           <Card>
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Upcoming bookings (next 10)</h2>
             {upcoming.length === 0 ? (
@@ -298,7 +321,7 @@ export const BookingPage: React.FC = () => {
                     {upcoming.map((u) => (
                       <tr key={u.id}>
                         <td className="px-4 py-2 text-sm text-gray-700">{u.amenityName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{new Date(u.date).toLocaleDateString()} {u.startTime} ({u.slotLength} min)</td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{formatIsoDateToDmy(u.date)} {u.startTime} ({u.slotLength} min)</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{u.userName}</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{u.building}</td>
                         <td className="px-4 py-2 text-sm text-gray-700">{u.apartmentNumber}</td>
@@ -322,7 +345,7 @@ export const BookingPage: React.FC = () => {
                 <li key={b.id} className="py-3 text-sm text-gray-700 flex items-center justify-between">
                   <div>
                     <span className="font-medium">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</span>
-                    <span className="ml-2">{new Date(b.date).toLocaleDateString()} {b.startTime} ({b.slotLength} min)</span>
+                    <span className="ml-2">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</span>
                   </div>
                   <Button variant="secondary" onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}>Delete</Button>
                 </li>
@@ -478,7 +501,7 @@ export const BookingPage: React.FC = () => {
                     <h4 className="text-sm font-medium text-gray-700 mb-4">Confirm your booking</h4>
                     <div className="space-y-2 text-sm text-gray-700">
                       <div><span className="font-medium">Amenity:</span> {selected.name}</div>
-                      <div><span className="font-medium">Date:</span> {new Date(selectedDate).toLocaleDateString()}</div>
+                      <div><span className="font-medium">Date:</span> {formatIsoDateToDmy(selectedDate)}</div>
                       <div><span className="font-medium">Time:</span> {selectedTime} ({selected.slotLength} min)</div>
                     </div>
                   </div>
