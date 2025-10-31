@@ -139,13 +139,19 @@ export class BookingsController {
     }
     const booking = await this.bookingsService.create({ userId, ...body });
 
-    // email confirmation (best-effort)
+    // email confirmation (best-effort, template-based)
     try {
       const amenity = (await this.amenitiesService.listAll()).find((a) => a.id === body.amenityId);
-      await this.emailService.sendGenericEmail(
+      await this.emailService.sendTemplateEmail(
         req.user.email,
         'Booking Confirmation',
-        `Your booking for ${amenity?.name ?? 'Amenity'} on ${body.date} at ${body.startTime} is confirmed.`,
+        'booking_confirmation',
+        {
+          name: req.user.name,
+          amenity: amenity?.name ?? 'Amenity',
+          date: body.date,
+          time: body.startTime,
+        },
       );
     } catch {}
 

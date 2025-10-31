@@ -19,6 +19,8 @@ import { RestrictionsModule } from './restrictions/restrictions.module';
 import { Booking } from './bookings/booking.entity';
 import { BookingLog } from './bookings/booking-log.entity';
 import { BookingsModule } from './bookings/bookings.module';
+import { EmailTemplate } from './email-templates/email-template.entity';
+import { EmailTemplatesModule } from './email-templates/email-templates.module';
 
 @Module({
   imports: [
@@ -31,7 +33,7 @@ import { BookingsModule } from './bookings/bookings.module';
       useFactory: (configService) => ({
         type: 'sqlite',
         database: configService.get('DB_PATH', 'booking.db'),
-        entities: [User, Building, Amenity, BookingRestriction, Booking, BookingLog],
+        entities: [User, Building, Amenity, BookingRestriction, Booking, BookingLog, EmailTemplate],
         synchronize: configService.get('NODE_ENV') !== 'production', // Only in development
         logging: configService.get('NODE_ENV') === 'development',
       }),
@@ -48,6 +50,7 @@ import { BookingsModule } from './bookings/bookings.module';
     AmenitiesModule,
     RestrictionsModule,
     BookingsModule,
+    EmailTemplatesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

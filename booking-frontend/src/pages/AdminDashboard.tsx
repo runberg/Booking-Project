@@ -45,7 +45,7 @@ export const AdminDashboard: React.FC = () => {
     userId: null,
     userName: '',
   });
-  const [activeTab, setActiveTab] = useState<'users' | 'buildings' | 'amenities' | 'logs'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'buildings' | 'amenities' | 'logs' | 'emails'>('users');
 
   // Buildings state
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -71,6 +71,21 @@ export const AdminDashboard: React.FC = () => {
   const [usersSortDir, setUsersSortDir] = useState<'ASC' | 'DESC'>('DESC');
   const [usersQuery, setUsersQuery] = useState<string>('');
 
+  // Email templates state
+  const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; body: string }>>([]);
+  const [isLoadingEmails, setIsLoadingEmails] = useState(false);
+  const fetchEmailTemplates = async () => {
+    try {
+      setIsLoadingEmails(true);
+      const { data } = await api.get('/admin/email-templates');
+      setEmailTemplates(data || []);
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to load email templates' });
+    } finally {
+      setIsLoadingEmails(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -81,6 +96,9 @@ export const AdminDashboard: React.FC = () => {
     }
     if (activeTab === 'logs') {
       fetchLogs();
+    }
+    if (activeTab === 'emails') {
+      fetchEmailTemplates();
     }
   }, [activeTab]);
 
@@ -320,6 +338,12 @@ export const AdminDashboard: React.FC = () => {
                 onClick={() => setActiveTab('amenities')}
               >
                 Amenities
+              </button>
+              <button
+                className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'emails' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                onClick={() => setActiveTab('emails')}
+              >
+                Emails
               </button>
             </nav>
           </div>
@@ -650,6 +674,64 @@ export const AdminDashboard: React.FC = () => {
           {activeTab === 'amenities' && (
             <div>
               <AmenitiesAdmin />
+            </div>
+          )}
+
+          {activeTab === 'emails' && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Email Templates</h2>
+                <p className="text-sm text-gray-600">
+                  Customize the messages sent to users. You can use placeholders like
+                  <span> {'{{name}}'}, {'{{amenity}}'}, {'{{date}}'}, {'{{time}}'} </span>
+                  where applicable.
+                </p>
+              </div>
+
+              {isLoadingEmails ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                  <p className="mt-2 text-sm text-gray-600">Loading templates...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {['registration', 'booking_confirmation'].map((k) => {
+                    const t = emailTemplates.find((x) => x.key === k) || { key: k, body: '' };
+                    const title = k === 'registration' ? 'User registration email' : 'Booking confirmation email';
+                    return (
+                      <Card key={k}>
+                        <div className="mb-3">
+                          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+                        </div>
+                        <textarea
+                          className="w-full min-h-[200px] rounded-md border border-gray-300 p-3 text-sm"
+                          value={t.body}
+                          onChange={(e) => setEmailTemplates((prev) => {
+                            const copy = [...prev];
+                            const idx = copy.findIndex((x) => x.key === k);
+                            if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
+                            else copy.push({ key: k, body: e.target.value });
+                            return copy;
+                          })}
+                        />
+                        <div className="mt-3 flex justify-end">
+                          <Button
+                            onClick={async () => {
+                              try {
+                                const body = (emailTemplates.find((x) => x.key === k)?.body) ?? '';
+                                await api.put(`/admin/email-templates/${k}`, { body });
+                                setNotification({ type: 'success', message: 'Template saved' });
+                              } catch (e: any) {
+                                setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
+                              }
+                            }}
+                          >Save</Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
