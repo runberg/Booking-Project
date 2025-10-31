@@ -1,7 +1,9 @@
 import axios from 'axios';
 import type { AuthResponse, RegisterData, LoginData, ApiResponse } from '../types/auth';
 
-const API_BASE_URL = 'http://localhost:3000';
+export const API_BASE_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL)
+  || (typeof window !== 'undefined' && (window as any).__API_BASE_URL__)
+  || '/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

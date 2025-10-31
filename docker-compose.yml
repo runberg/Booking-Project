@@ -1,0 +1,68 @@
+version: "3.8"
+
+services:
+  proxy:
+    image: traefik:v3.0
+    command:
+      - --providers.docker=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.email=${LE_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/letsencrypt
+    networks: [public]
+
+  api:
+    build: ./booking-api
+    environment:
+      NODE_ENV: production
+      DB_PATH: /data/booking.db
+      CORS_ORIGIN: https://${APP_HOST}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      FRONTEND_URL: https://${APP_HOST}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`${APP_HOST}`) && PathPrefix(`/api`)
+      - traefik.http.routers.api.entrypoints=websecure
+      - traefik.http.routers.api.tls.certresolver=le
+      - traefik.http.services.api.loadbalancer.server.port=3000
+      - traefik.http.middlewares.api-strip.stripprefix.prefixes=/api
+      - traefik.http.routers.api.middlewares=api-strip
+    volumes:
+      - db_data:/data
+    networks: [public, internal]
+    restart: always
+
+  web:
+    build: ./booking-frontend
+    environment:
+      # For build-time API base, if you prefer absolute URL instead of /api path
+      # VITE_API_BASE_URL: https://${APP_HOST}/api
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.web.rule=Host(`${APP_HOST}`)
+      - traefik.http.routers.web.entrypoints=websecure
+      - traefik.http.routers.web.tls.certresolver=le
+      - traefik.http.services.web.loadbalancer.server.port=80
+    networks: [public]
+    restart: always
+
+networks:
+  public: {}
+  internal: {}
+
+volumes:
+  db_data: {}
+  acme: {}
+
+

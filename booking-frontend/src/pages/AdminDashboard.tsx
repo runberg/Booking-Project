@@ -6,7 +6,7 @@ import { Notification } from '../components/Notification';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { Users, LogOut, Trash2, Mail } from 'lucide-react';
 import { AmenitiesAdmin } from './AmenitiesAdmin';
-import { authService, api } from '../services/authService';
+import { authService, api, API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
 
 interface User {
@@ -242,7 +242,7 @@ export const AdminDashboard: React.FC = () => {
         sortDir: nextSortDir,
       });
       if (nextQ) params.set('q', String(nextQ));
-      const res = await fetch(`http://localhost:3000/bookings/logs?${params.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/bookings/logs?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
       });
       if (!res.ok) throw new Error('Failed to fetch logs');
@@ -537,7 +537,7 @@ export const AdminDashboard: React.FC = () => {
                                   variant="secondary"
                                   onClick={async () => {
                                     try {
-                                      await fetch(`http://localhost:3000/admin/users/${user.id}/role`, {
+                                      await fetch(`${API_BASE_URL}/admin/users/${user.id}/role`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
                                         body: JSON.stringify({ role: 'super' }),
@@ -556,7 +556,7 @@ export const AdminDashboard: React.FC = () => {
                                   variant="secondary"
                                   onClick={async () => {
                                     try {
-                                      await fetch(`http://localhost:3000/admin/users/${user.id}/role`, {
+                                      await fetch(`${API_BASE_URL}/admin/users/${user.id}/role`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
                                         body: JSON.stringify({ role: 'user' }),
@@ -826,7 +826,7 @@ export const AdminDashboard: React.FC = () => {
                       if ((logsFilters as any).q) params.set('q', String((logsFilters as any).q));
                       params.set('sortBy', logsSortBy);
                       params.set('sortDir', logsSortDir);
-                      const url = `http://localhost:3000/bookings/logs/export?${params.toString()}`;
+                      const url = `${API_BASE_URL}/bookings/logs/export?${params.toString()}`;
                       const res = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } });
                       if (!res.ok) throw new Error('Failed to export CSV');
                       const text = await res.text();
