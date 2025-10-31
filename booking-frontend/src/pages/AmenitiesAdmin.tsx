@@ -23,9 +23,12 @@ export const AmenitiesAdmin: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<Amenity>>({});
   const [error, setError] = useState<string>('');
+  const [createOpen, setCreateOpen] = useState<boolean>(false);
   // Restrictions state
   const [restrictions, setRestrictions] = useState<Array<{ id: string; name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number; isActive: boolean }>>([]);
   const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+  const [createRestrictionOpen, setCreateRestrictionOpen] = useState<boolean>(false);
+  const [newRestriction, setNewRestriction] = useState<{ name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number }>({ name: '', daysAhead: 14, maxPerPeriod: 2, maxPerDay: 1 });
 
   useEffect(() => {
     fetchAmenities();
@@ -111,62 +114,108 @@ export const AmenitiesAdmin: React.FC = () => {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-gray-900">Amenities</h2>
-        <span className="text-sm text-gray-600">{amenities.length} amenities</span>
       </div>
 
-      {/* Restrictions Management */}
+      {/* Restrictions */}
       <div className="bg-white border border-gray-200 rounded-md p-4 mb-6">
-        <h3 className="text-md font-semibold text-gray-900 mb-3">Amenity Booking Restrictions</h3>
-        <RestrictionsAdmin
-          restrictions={restrictions}
-          onRefresh={fetchRestrictions}
-          onError={(msg) => setError(msg)}
-        />
-      </div>
-
-      {/* Create */}
-      <div className="bg-gray-50 border border-gray-200 rounded-md p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-3">
-          <input className="rounded-md border border-gray-300 py-2 px-3" placeholder="Name" value={newAmenity.name || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, name: e.target.value }))} />
-          <input className="rounded-md border border-gray-300 py-2 px-3" placeholder="Description" value={newAmenity.description || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, description: e.target.value }))} />
-          <input className="rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.openTime || '09:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, openTime: e.target.value }))} />
-          <input className="rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.closeTime || '22:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, closeTime: e.target.value }))} />
-          <select className="rounded-md border border-gray-300 py-2 px-3" value={newAmenity.slotLength || 60} onChange={(e) => setNewAmenity((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
-            <option value={30}>30 min</option>
-            <option value={60}>60 min</option>
-            <option value={90}>90 min</option>
-            <option value={120}>120 min</option>
-          </select>
-          <select className="rounded-md border border-gray-300 py-2 px-3" value={(newAmenity.bookingRestrictionId as any) || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, bookingRestrictionId: e.target.value }))}>
-            <option value="" disabled>Select restriction</option>
-            {restrictions.map((r) => (
-              <option key={r.id} value={r.id}>{r.name} (D{r.daysAhead}/P{r.maxPerPeriod}/D{r.maxPerDay})</option>
-            ))}
-          </select>
-          <div className="flex items-center space-x-2">
-            <input className="flex-1 rounded-md border border-gray-300 py-2 px-3" placeholder="Image URL (optional)" value={newAmenity.imageUrl || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, imageUrl: e.target.value }))} />
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-md font-semibold text-gray-900">Amenity Booking Restrictions</h3>
+          <div className="flex items-center space-x-3">
+            <Button variant="secondary" onClick={() => setCreateRestrictionOpen(true)}>Add Restriction</Button>
           </div>
-          <div className="flex items-center">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                if (file.size > MAX_IMAGE_BYTES) {
-                  setError('Image is too large. Max size is 2 MB.');
-                  return;
-                }
-                setError('');
-                const reader = new FileReader();
-                reader.onload = () => setNewAmenity((s) => ({ ...s, imageUrl: reader.result as string }));
-                reader.readAsDataURL(file);
-              }}
-            />
-          </div>
-          <div className="flex items-center"><Button onClick={handleCreate} disabled={!restrictions.length || !newAmenity.bookingRestrictionId}>Add Amenity</Button></div>
         </div>
+        {restrictions.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-6 text-center text-gray-600">
+            No restrictions yet. Click "Add Restriction" to create one.
+          </div>
+        ) : (
+          <RestrictionsAdmin
+            restrictions={restrictions}
+            onRefresh={fetchRestrictions}
+            onError={(msg) => setError(msg)}
+            hideCreate
+          />
+        )}
       </div>
+      {/* Create Amenity Modal */}
+      {createOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateOpen(false)} />
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Add Amenity</h3>
+                <p className="text-sm text-gray-600">Provide details for the new amenity.</p>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.name || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.description || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, description: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Open time</label>
+                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.openTime || '09:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, openTime: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Close time</label>
+                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.closeTime || '22:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, closeTime: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Slot length</label>
+                  <select className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.slotLength || 60} onChange={(e) => setNewAmenity((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
+                    <option value={30}>30 min</option>
+                    <option value={60}>60 min</option>
+                    <option value={90}>90 min</option>
+                    <option value={120}>120 min</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Restriction</label>
+                  <select className="w-full rounded-md border border-gray-300 py-2 px-3" value={(newAmenity.bookingRestrictionId as any) || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, bookingRestrictionId: e.target.value }))}>
+                    <option value="" disabled>Select restriction</option>
+                    {restrictions.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name} (D{r.daysAhead}/P{r.maxPerPeriod}/D{r.maxPerDay})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
+                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.imageUrl || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, imageUrl: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Upload Image (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > MAX_IMAGE_BYTES) {
+                        setError('Image is too large. Max size is 2 MB.');
+                        return;
+                      }
+                      setError('');
+                      const reader = new FileReader();
+                      reader.onload = () => setNewAmenity((s) => ({ ...s, imageUrl: reader.result as string }));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button onClick={async () => { await handleCreate(); setCreateOpen(false); }}>Create</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {!restrictions.length && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-sm text-yellow-800">Create a booking restriction first to add an amenity.</div>
       )}
@@ -174,16 +223,21 @@ export const AmenitiesAdmin: React.FC = () => {
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
       {/* List */}
-      {isLoading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
+      <div className="bg-white border border-gray-200 rounded-md p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-md font-semibold text-gray-900">Amenities</h3>
+          <Button onClick={() => setCreateOpen(true)} variant="secondary" disabled={!restrictions.length}>Add Amenity</Button>
         </div>
-      ) : amenities.length === 0 ? (
-        <div className="text-center py-10 text-gray-600">No amenities yet. Add Amenity.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        {isLoading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
+          </div>
+        ) : amenities.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-6 text-center text-gray-600">No amenities yet. Click "Add Amenity" to create one.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenity</th>
@@ -292,7 +346,56 @@ export const AmenitiesAdmin: React.FC = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
+        )}
+      </div>
+      {/* Create Restriction Modal */}
+      {createRestrictionOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateRestrictionOpen(false)} />
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Add Restriction</h3>
+                <p className="text-sm text-gray-600">Define the booking limits for amenities.</p>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newRestriction.name} onChange={(e) => setNewRestriction((s) => ({ ...s, name: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Days ahead</label>
+                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={1} value={newRestriction.daysAhead} onChange={(e) => setNewRestriction((s) => ({ ...s, daysAhead: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max per period</label>
+                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={0} value={newRestriction.maxPerPeriod} onChange={(e) => setNewRestriction((s) => ({ ...s, maxPerPeriod: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max per day</label>
+                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={0} value={newRestriction.maxPerDay} onChange={(e) => setNewRestriction((s) => ({ ...s, maxPerDay: Number(e.target.value) }))} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <Button variant="secondary" onClick={() => setCreateRestrictionOpen(false)}>Cancel</Button>
+                <Button onClick={async () => {
+                  if (!newRestriction.name.trim()) { setError('Name is required'); return; }
+                  try {
+                    await api.post('/admin/restrictions', newRestriction);
+                    setNewRestriction({ name: '', daysAhead: 14, maxPerPeriod: 2, maxPerDay: 1 });
+                    setCreateRestrictionOpen(false);
+                    fetchRestrictions();
+                  } catch (e: any) {
+                    setError(e.response?.data?.message || 'Failed to create restriction');
+                  }
+                }}>Create</Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -303,7 +406,8 @@ const RestrictionsAdmin: React.FC<{
   restrictions: Array<{ id: string; name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number; isActive: boolean }>;
   onRefresh: () => void;
   onError: (msg: string) => void;
-}> = ({ restrictions, onRefresh, onError }) => {
+  hideCreate?: boolean;
+}> = ({ restrictions, onRefresh, onError, hideCreate }) => {
   const [creating, setCreating] = useState({ name: '', daysAhead: 14, maxPerPeriod: 2, maxPerDay: 1 });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ name?: string; daysAhead?: number; maxPerPeriod?: number; maxPerDay?: number; isActive?: boolean }>({});
@@ -342,13 +446,15 @@ const RestrictionsAdmin: React.FC<{
 
   return (
     <div>
-      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-3">
-        <input className="rounded-md border border-gray-300 py-2 px-3" placeholder="Name" value={creating.name} onChange={(e) => setCreating((s) => ({ ...s, name: e.target.value }))} />
-        <input className="rounded-md border border-gray-300 py-2 px-3" type="number" min={1} placeholder="Days Ahead" value={creating.daysAhead} onChange={(e) => setCreating((s) => ({ ...s, daysAhead: Number(e.target.value) }))} />
-        <input className="rounded-md border border-gray-300 py-2 px-3" type="number" min={0} placeholder="Max Per Period" value={creating.maxPerPeriod} onChange={(e) => setCreating((s) => ({ ...s, maxPerPeriod: Number(e.target.value) }))} />
-        <input className="rounded-md border border-gray-300 py-2 px-3" type="number" min={0} placeholder="Max Per Day" value={creating.maxPerDay} onChange={(e) => setCreating((s) => ({ ...s, maxPerDay: Number(e.target.value) }))} />
-        <div className="flex items-center"><Button onClick={createRestriction}>Add Restriction</Button></div>
-      </div>
+      {!hideCreate && (
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-3">
+          <input className="rounded-md border border-gray-300 py-2 px-3" placeholder="Name" value={creating.name} onChange={(e) => setCreating((s) => ({ ...s, name: e.target.value }))} />
+          <input className="rounded-md border border-gray-300 py-2 px-3" type="number" min={1} placeholder="Days Ahead" value={creating.daysAhead} onChange={(e) => setCreating((s) => ({ ...s, daysAhead: Number(e.target.value) }))} />
+          <input className="rounded-md border border-gray-300 py-2 px-3" type="number" min={0} placeholder="Max Per Period" value={creating.maxPerPeriod} onChange={(e) => setCreating((s) => ({ ...s, maxPerPeriod: Number(e.target.value) }))} />
+          <input className="rounded-md border border-gray-300 py-2 px-3" type="number" min={0} placeholder="Max Per Day" value={creating.maxPerDay} onChange={(e) => setCreating((s) => ({ ...s, maxPerDay: Number(e.target.value) }))} />
+          <div className="flex items-center"><Button onClick={createRestriction}>Add Restriction</Button></div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
