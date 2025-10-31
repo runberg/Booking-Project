@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -19,9 +19,21 @@ export const LoginPage: React.FC = () => {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const sessionMsg = useMemo(() => {
+  const [sessionMsg, setSessionMsg] = useState('');
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search);
-    return params.get('reason') === 'expired' ? 'Your session has expired. Please sign in again.' : '';
+    const fromQuery = params.get('reason') === 'expired';
+    const fromFlag = (() => {
+      try { return sessionStorage.getItem('sessionExpired') === '1'; } catch { return false; }
+    })();
+    if (fromQuery || fromFlag) {
+      setSessionMsg('Your session has expired. Please sign in again.');
+    } else {
+      setSessionMsg('');
+    }
+    // Clear the one-shot flag so direct visits won't show it
+    try { sessionStorage.removeItem('sessionExpired'); } catch {}
   }, [location.search]);
 
   const {

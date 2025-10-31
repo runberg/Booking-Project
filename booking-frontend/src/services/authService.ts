@@ -89,7 +89,10 @@ api.interceptors.response.use(
           localStorage.removeItem('user');
         } catch {}
         if (typeof window !== 'undefined') {
-          window.location.href = '/login?reason=expired';
+          try {
+            sessionStorage.setItem('sessionExpired', '1');
+          } catch {}
+          window.location.href = '/login';
         }
         return Promise.reject(refreshErr);
       } finally {
@@ -104,7 +107,7 @@ api.interceptors.response.use(
         localStorage.removeItem('user');
       } catch {}
       if (typeof window !== 'undefined') {
-        window.location.href = '/login?reason=expired';
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
