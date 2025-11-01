@@ -20,6 +20,11 @@ logs/*
 *.seed
 *.pid.lock
 
+# === Databases (ensure no DB content is committed) ===
+*.db
+*.sqlite
+*.sqlite3
+
 # === OS-specific ===
 .DS_Store
 Thumbs.db
