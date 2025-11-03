@@ -17,6 +17,8 @@ This repository ships generic deployment files using environment placeholders. D
 - `env.example`: sample env file to copy and fill on the server
 
 ### Required environment (server-side)
+**Prerequisites:** Docker and Docker Compose must be installed on the server.
+
 Copy `env.example` to `.env.production` (or `.env`) and fill in:
 
 ```
@@ -45,6 +47,29 @@ Traefik terminates TLS and routes both frontend and backend on the same host:
 - The frontend uses `/api` by default. If you prefer absolute URLs, set `VITE_API_BASE_URL` at build-time.
 - CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
 - SQLite database is persisted in the `db_data` volume at `/data/booking.db` inside the API container.
+
+### Post-deployment: Update Content
+After deploying, log in as an admin and navigate to the Admin Dashboard → Content tab. You must update:
+- **Rules and Regulations**: Customize the legal texts shown during registration and booking confirmation
+- **Mail**: Update email templates for user registration and booking confirmation emails
+
+These texts are stored in the database and should be customized for your organization before users start registering.
+
+### Database Migrations
+
+When deploying code changes that modify the database schema (e.g., adding new columns, tables), you must run migrations:
+
+```bash
+# Run pending migrations
+docker compose exec api npm run migration:run
+
+# Check migration status
+docker compose exec api npm run migration:show
+```
+
+**⚠️ Important**: Always backup your database before running migrations in production.
+
+See `booking-api/MIGRATIONS.md` for detailed migration documentation.
 
 ## Q&A
 
@@ -80,6 +105,8 @@ This repository ships generic deployment files using environment placeholders. D
 - `env.example`: sample env file to copy and fill on the server
 
 ### Required environment (server-side)
+**Prerequisites:** Docker and Docker Compose must be installed on the server.
+
 Copy `env.example` to `.env.production` (or `.env`) and fill in:
 
 ```
@@ -108,5 +135,12 @@ Traefik terminates TLS and routes both frontend and backend on the same host:
 - The frontend uses `/api` by default. If you prefer absolute URLs, set `VITE_API_BASE_URL` at build-time.
 - CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
 - SQLite database is persisted in the `db_data` volume at `/data/booking.db` inside the API container.
+
+### Post-deployment: Update Content
+After deploying, log in as an admin and navigate to the Admin Dashboard → Content tab. You must update:
+- **Rules and Regulations**: Customize the legal texts shown during registration and booking confirmation
+- **Mail**: Update email templates for user registration and booking confirmation emails
+
+These texts are stored in the database and should be customized for your organization before users start registering.
 
 

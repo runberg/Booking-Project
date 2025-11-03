@@ -30,6 +30,7 @@ export const RegisterPage: React.FC = () => {
   const [error, setError] = useState('');
   const [buildings, setBuildings] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingBuildings, setIsLoadingBuildings] = useState(true);
+  const [legalText, setLegalText] = useState<string>('Legal note - Account creation');
 
   const {
     register,
@@ -51,6 +52,21 @@ export const RegisterPage: React.FC = () => {
       }
     };
     loadBuildings();
+  }, []);
+
+  useEffect(() => {
+    const loadLegalText = async () => {
+      try {
+        const { data } = await api.get('/email-templates/registration-legal-text');
+        if (data?.text) {
+          setLegalText(data.text);
+        }
+      } catch (e: any) {
+        // If it fails, just use the default
+        console.warn('Failed to load legal text:', e);
+      }
+    };
+    loadLegalText();
   }, []);
 
   const onSubmit = async (data: RegisterData) => {
@@ -144,6 +160,12 @@ export const RegisterPage: React.FC = () => {
               required
               {...register('apartmentNumber')}
             />
+
+            {legalText && (
+              <div className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">
+                {legalText}
+              </div>
+            )}
 
             <Button
               type="submit"

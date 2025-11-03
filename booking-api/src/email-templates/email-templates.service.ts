@@ -6,6 +6,8 @@ import { EmailTemplate } from './email-template.entity';
 const DEFAULTS: Record<string, string> = {
   registration: 'Welcome {{name}},\n\nPlease verify your email to activate your account.',
   booking_confirmation: 'Hello {{name}},\n\nYour booking for {{amenity}} on {{date}} at {{time}} is confirmed.',
+  registration_legal_text: 'Legal note - Account creation',
+  booking_legal_text: 'Legal note - Booking confirmation',
 };
 
 @Injectable()

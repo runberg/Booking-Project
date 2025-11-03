@@ -343,7 +343,7 @@ export const AdminDashboard: React.FC = () => {
                 className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'emails' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('emails')}
               >
-                Emails
+                Content
               </button>
             </nav>
           </div>
@@ -680,12 +680,7 @@ export const AdminDashboard: React.FC = () => {
           {activeTab === 'emails' && (
             <div>
               <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Email Templates</h2>
-                <p className="text-sm text-gray-600">
-                  Customize the messages sent to users. You can use placeholders like
-                  <span> {'{{name}}'}, {'{{amenity}}'}, {'{{date}}'}, {'{{time}}'} </span>
-                  where applicable.
-                </p>
+                <h2 className="text-xl font-semibold text-gray-900">Content Management</h2>
               </div>
 
               {isLoadingEmails ? (
@@ -695,22 +690,24 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {['registration', 'booking_confirmation'].map((k) => {
-                    const t = emailTemplates.find((x) => x.key === k) || { key: k, body: '' };
-                    const title = k === 'registration' ? 'User registration email' : 'Booking confirmation email';
-                    return (
-                      <Card key={k}>
-                        <div className="mb-3">
-                          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-                        </div>
+                  {/* Rules and Regulations Card */}
+                  <Card>
+                    <div className="mb-6">
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Rules and Regulations</h3>
+                      <p className="text-sm text-gray-600">Manage legal texts and terms that appear during registration and booking processes.</p>
+                    </div>
+                    <div className="space-y-6">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">Registration Legal Text</h4>
+                        <p className="text-sm text-gray-600 mb-3">This text appears above the "Create account" button on the registration page.</p>
                         <textarea
-                          className="w-full min-h-[200px] rounded-md border border-gray-300 p-3 text-sm"
-                          value={t.body}
+                          className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm"
+                          value={emailTemplates.find((x) => x.key === 'registration_legal_text')?.body || 'Legal note - Account creation'}
                           onChange={(e) => setEmailTemplates((prev) => {
                             const copy = [...prev];
-                            const idx = copy.findIndex((x) => x.key === k);
+                            const idx = copy.findIndex((x) => x.key === 'registration_legal_text');
                             if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
-                            else copy.push({ key: k, body: e.target.value });
+                            else copy.push({ key: 'registration_legal_text', body: e.target.value });
                             return copy;
                           })}
                         />
@@ -718,18 +715,96 @@ export const AdminDashboard: React.FC = () => {
                           <Button
                             onClick={async () => {
                               try {
-                                const body = (emailTemplates.find((x) => x.key === k)?.body) ?? '';
-                                await api.put(`/admin/email-templates/${k}`, { body });
-                                setNotification({ type: 'success', message: 'Template saved' });
+                                const body = (emailTemplates.find((x) => x.key === 'registration_legal_text')?.body) ?? 'Legal note - Account creation';
+                                await api.put(`/admin/email-templates/registration_legal_text`, { body });
+                                setNotification({ type: 'success', message: 'Legal text saved' });
                               } catch (e: any) {
-                                setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
+                                setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save legal text' });
                               }
                             }}
                           >Save</Button>
                         </div>
-                      </Card>
-                    );
-                  })}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">Booking Confirmation Legal Text</h4>
+                        <p className="text-sm text-gray-600 mb-3">This text appears above the "Confirm booking" button when confirming a booking.</p>
+                        <textarea
+                          className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm"
+                          value={emailTemplates.find((x) => x.key === 'booking_legal_text')?.body || 'Legal note - Booking confirmation'}
+                          onChange={(e) => setEmailTemplates((prev) => {
+                            const copy = [...prev];
+                            const idx = copy.findIndex((x) => x.key === 'booking_legal_text');
+                            if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
+                            else copy.push({ key: 'booking_legal_text', body: e.target.value });
+                            return copy;
+                          })}
+                        />
+                        <div className="mt-3 flex justify-end">
+                          <Button
+                            onClick={async () => {
+                              try {
+                                const body = (emailTemplates.find((x) => x.key === 'booking_legal_text')?.body) ?? 'Legal note - Booking confirmation';
+                                await api.put(`/admin/email-templates/booking_legal_text`, { body });
+                                setNotification({ type: 'success', message: 'Legal text saved' });
+                              } catch (e: any) {
+                                setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save legal text' });
+                              }
+                            }}
+                          >Save</Button>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Mail Card */}
+                  <Card>
+                    <div className="mb-6">
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Mail</h3>
+                      <p className="text-sm text-gray-600">Customize email templates sent to users. You can use placeholders like
+                        <span> {'{{name}}'}, {'{{amenity}}'}, {'{{date}}'}, {'{{time}}'} </span>
+                        where applicable.
+                      </p>
+                    </div>
+                    <div className="space-y-6">
+                      {['registration', 'booking_confirmation'].map((k) => {
+                        const t = emailTemplates.find((x) => x.key === k) || { key: k, body: '' };
+                        const title = k === 'registration' ? 'User registration email' : 'Booking confirmation email';
+                        const description = k === 'registration' 
+                          ? 'This email is sent to users after they register to verify their email address.'
+                          : 'This email is sent to users after they successfully confirm a booking.';
+                        return (
+                          <div key={k}>
+                            <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
+                            <p className="text-sm text-gray-600 mb-3">{description}</p>
+                            <textarea
+                              className="w-full min-h-[200px] rounded-md border border-gray-300 p-3 text-sm"
+                              value={t.body}
+                              onChange={(e) => setEmailTemplates((prev) => {
+                                const copy = [...prev];
+                                const idx = copy.findIndex((x) => x.key === k);
+                                if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
+                                else copy.push({ key: k, body: e.target.value });
+                                return copy;
+                              })}
+                            />
+                            <div className="mt-3 flex justify-end">
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    const body = (emailTemplates.find((x) => x.key === k)?.body) ?? '';
+                                    await api.put(`/admin/email-templates/${k}`, { body });
+                                    setNotification({ type: 'success', message: 'Template saved' });
+                                  } catch (e: any) {
+                                    setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
+                                  }
+                                }}
+                              >Save</Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
                 </div>
               )}
             </div>

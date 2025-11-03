@@ -36,6 +36,7 @@ export const BookingPage: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; bookingId: string | null }>(() => ({ open: false, bookingId: null }));
   const [infoMessage, setInfoMessage] = useState<string>('');
   const [upcoming, setUpcoming] = useState<Array<{ id: string; amenityName: string; date: string; startTime: string; slotLength: number; userName: string; building: string; apartmentNumber: string }>>([]);
+  const [bookingLegalText, setBookingLegalText] = useState<string>('Legal note - Booking confirmation');
   const periodLimitReached = useMemo(() => {
     if (!selected) return false;
     if (selected.maxPerPeriod == null || selected.maxPerPeriod <= 0) return false;
@@ -90,6 +91,21 @@ export const BookingPage: React.FC = () => {
     }, 10000); // every 10s
     return () => clearInterval(id);
   }, [currentUser]);
+
+  useEffect(() => {
+    const loadBookingLegalText = async () => {
+      try {
+        const { data } = await api.get('/email-templates/booking-legal-text');
+        if (data?.text) {
+          setBookingLegalText(data.text);
+        }
+      } catch (e: any) {
+        // If it fails, just use the default
+        console.warn('Failed to load booking legal text:', e);
+      }
+    };
+    loadBookingLegalText();
+  }, []);
 
   // Build calendar weeks (Mon-Sun) from today to today+daysAhead
   const calendarWeeks = useMemo(() => {
@@ -510,6 +526,13 @@ export const BookingPage: React.FC = () => {
                 {infoMessage && (
                   <div className="mt-4 text-sm text-red-600">{infoMessage}</div>
                 )}
+
+                {step === 'confirm' && bookingLegalText && (
+                  <div className="mt-4 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">
+                    {bookingLegalText}
+                  </div>
+                )}
+
                 <div className="mt-6 flex justify-end space-x-3">
                   <Button variant="secondary" onClick={() => setSelected(null)}>Close</Button>
                   {step === 'select' ? (

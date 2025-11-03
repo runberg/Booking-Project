@@ -1,9 +1,19 @@
 import axios from 'axios';
 import type { AuthResponse, RegisterData, LoginData, ApiResponse } from '../types/auth';
 
-export const API_BASE_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL)
-  || (typeof window !== 'undefined' && (window as any).__API_BASE_URL__)
-  || '/api';
+export const API_BASE_URL = (() => {
+  const viteEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) || '';
+  if (viteEnv) return viteEnv;
+  if (typeof window !== 'undefined') {
+    const injected = (window as any).__API_BASE_URL__;
+    if (injected) return injected;
+    const origin = window.location.origin || '';
+    if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
+      return 'http://localhost:3000';
+    }
+  }
+  return '/api';
+})();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
