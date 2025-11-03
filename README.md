@@ -22,7 +22,7 @@ This repository ships generic deployment files using environment placeholders. D
 Copy `env.example` to `.env.production` (or `.env`) and fill in:
 
 ```
-APP_HOST=app.example.com
+APP_HOST=app.example.com  # Single domain for both frontend and API (path-based routing)
 LE_EMAIL=admin@example.com
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
@@ -39,12 +39,14 @@ docker compose --env-file .env.production build
 docker compose --env-file .env.production up -d
 ```
 
-Traefik terminates TLS and routes both frontend and backend on the same host:
-- Web: https://APP_HOST
-- API: https://APP_HOST/api (Traefik strips the /api prefix to the API container)
+Traefik terminates TLS and routes both frontend and backend on the same domain using path-based routing:
+- Web: `https://APP_HOST` (e.g., `https://app.example.com`)
+- API: `https://APP_HOST/api` (Traefik strips the `/api` prefix before forwarding to the API container)
+
+**DNS Setup:** Only one A record is needed: `APP_HOST` → your server IP.
 
 ### Notes
-- The frontend uses `/api` by default. If you prefer absolute URLs, set `VITE_API_BASE_URL` at build-time.
+- The frontend uses relative `/api` path by default (no separate domain needed).
 - CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
 - SQLite database is persisted in the `db_data` volume at `/data/booking.db` inside the API container.
 
@@ -110,7 +112,7 @@ This repository ships generic deployment files using environment placeholders. D
 Copy `env.example` to `.env.production` (or `.env`) and fill in:
 
 ```
-APP_HOST=app.example.com
+APP_HOST=app.example.com  # Single domain for both frontend and API (path-based routing)
 LE_EMAIL=admin@example.com
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
@@ -127,12 +129,14 @@ docker compose --env-file .env.production build
 docker compose --env-file .env.production up -d
 ```
 
-Traefik terminates TLS and routes both frontend and backend on the same host:
-- Web: https://APP_HOST
-- API: https://APP_HOST/api (Traefik strips the /api prefix to the API container)
+Traefik terminates TLS and routes both frontend and backend on the same domain using path-based routing:
+- Web: `https://APP_HOST` (e.g., `https://app.example.com`)
+- API: `https://APP_HOST/api` (Traefik strips the `/api` prefix before forwarding to the API container)
+
+**DNS Setup:** Only one A record is needed: `APP_HOST` → your server IP.
 
 ### Notes
-- The frontend uses `/api` by default. If you prefer absolute URLs, set `VITE_API_BASE_URL` at build-time.
+- The frontend uses relative `/api` path by default (no separate domain needed).
 - CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
 - SQLite database is persisted in the `db_data` volume at `/data/booking.db` inside the API container.
 
