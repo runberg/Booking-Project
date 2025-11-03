@@ -1,9 +1,8 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-# Ensure devDependencies (like typescript and @nestjs/cli) are installed during build
-ENV NPM_CONFIG_PRODUCTION=false
-RUN npm install --include=dev
+# Ensure devDependencies are installed; explicitly disable production for npm
+RUN npm config set production false && npm ci --no-audit --no-fund
 
 FROM node:20-alpine AS build
 WORKDIR /app
