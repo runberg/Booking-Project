@@ -1,8 +1,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-# Ensure devDependencies are installed using supported flag
-RUN npm ci --omit=dev=false --no-audit --no-fund
+# Ensure devDependencies are installed; explicitly disable npm production mode
+ENV NPM_CONFIG_PRODUCTION=false
+ENV npm_config_production=false
+RUN npm ci --include=dev --no-audit --no-fund
 COPY . .
 # Optionally pass VITE_API_BASE_URL at build time
 # e.g., docker build --build-arg VITE_API_BASE_URL

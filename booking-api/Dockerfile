@@ -1,8 +1,9 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
+ENV NPM_CONFIG_PRODUCTION=false
+ENV npm_config_production=false
 COPY package*.json ./
-# Ensure devDependencies are installed using supported flag
-RUN npm ci --omit=dev=false --no-audit --no-fund
+RUN npm ci --include=dev --no-audit --no-fund
 
 FROM node:20-alpine AS build
 WORKDIR /app
