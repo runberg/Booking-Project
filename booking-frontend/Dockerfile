@@ -10,8 +10,8 @@ COPY . .
 # e.g., docker build --build-arg VITE_API_BASE_URL
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-# Build using npm scripts (adds node_modules/.bin to PATH)
-RUN npm run build
+# Build using direct path to vite to avoid PATH issues
+RUN ./node_modules/.bin/vite build || (echo "Vite not found, checking installation..." && ls -la node_modules/.bin/ | head -20 && npm ls vite && exit 1)
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
