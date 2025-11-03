@@ -3,7 +3,7 @@ WORKDIR /app
 ENV NPM_CONFIG_PRODUCTION=false
 ENV npm_config_production=false
 COPY package*.json ./
-RUN npm ci --include=dev --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 
 FROM node:20-alpine AS build
 WORKDIR /app
