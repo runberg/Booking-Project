@@ -1,6 +1,7 @@
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package*.json ./
+# Copy only package.json to avoid lockfile incompatibilities across environments
+COPY package.json ./
 # Ensure all dependencies (including dev) are installed reliably
 ENV NPM_CONFIG_PRODUCTION=false
 ENV npm_config_production=false
@@ -10,8 +11,8 @@ COPY . .
 # e.g., docker build --build-arg VITE_API_BASE_URL
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-# Build using direct path to vite to avoid PATH issues
-RUN ./node_modules/.bin/vite build || (echo "Vite not found, checking installation..." && ls -la node_modules/.bin/ | head -20 && npm ls vite && exit 1)
+# Build (node_modules/.bin is on PATH when using npm scripts, but we call directly too)
+RUN ./node_modules/.bin/vite build || (echo "Vite not found, installing locally..." && npm install vite @vitejs/plugin-react --no-audit --no-fund && ./node_modules/.bin/vite build)
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html

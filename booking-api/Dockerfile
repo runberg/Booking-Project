@@ -2,7 +2,8 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 ENV NPM_CONFIG_PRODUCTION=false
 ENV npm_config_production=false
-COPY package*.json ./
+# Copy only package.json to avoid lockfile incompatibilities
+COPY package.json ./
 RUN npm install --no-audit --no-fund
 
 FROM node:20-alpine AS build
@@ -16,7 +17,8 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
-COPY package*.json ./
+# Copy only package.json for production install
+COPY package.json ./
 RUN npm ci --omit=dev
 VOLUME ["/data"]
 ENV DB_PATH=/data/booking.db
