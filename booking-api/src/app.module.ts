@@ -34,16 +34,30 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
         const isProduction = configService.get('NODE_ENV') === 'production';
         const dbPath = configService.get('DB_PATH', 'booking.db');
         
-        // For fresh production deployments, enable synchronize if database doesn't exist
+        // For fresh production deployments, enable synchronize if database doesn't exist or is empty
         // This allows initial setup without migrations
         let shouldSynchronize = !isProduction;
         if (isProduction) {
           const fs = require('fs');
-          const path = require('path');
-          const dbExists = fs.existsSync(dbPath);
-          if (!dbExists) {
+          try {
+            // Check if database file exists and has content
+            const dbExists = fs.existsSync(dbPath);
+            if (!dbExists) {
+              shouldSynchronize = true;
+              console.log('⚠️  Fresh database detected - enabling synchronize for initial setup');
+            } else {
+              // Check if database has tables by trying to read it
+              const stats = fs.statSync(dbPath);
+              // If database file is very small (< 100 bytes), it's likely empty
+              if (stats.size < 100) {
+                shouldSynchronize = true;
+                console.log('⚠️  Empty database detected - enabling synchronize for initial setup');
+              }
+            }
+          } catch (error) {
+            // If we can't check, assume it's fresh and enable synchronize
             shouldSynchronize = true;
-            console.log('⚠️  Fresh database detected - enabling synchronize for initial setup');
+            console.log('⚠️  Could not verify database state - enabling synchronize for initial setup');
           }
         }
         
