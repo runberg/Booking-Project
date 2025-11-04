@@ -10,8 +10,8 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Compile using local TypeScript (no CLI/network lookup)
-RUN ./node_modules/.bin/tsc -p tsconfig.build.json
+# Build using npm script (uses Nest CLI with proper path resolution)
+RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /app
