@@ -30,13 +30,31 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService) => ({
-        type: 'sqlite',
-        database: configService.get('DB_PATH', 'booking.db'),
-        entities: [User, Building, Amenity, BookingRestriction, Booking, BookingLog, EmailTemplate],
-        synchronize: configService.get('NODE_ENV') !== 'production', // Only in development
-        logging: configService.get('NODE_ENV') === 'development',
-      }),
+      useFactory: async (configService) => {
+        const isProduction = configService.get('NODE_ENV') === 'production';
+        const dbPath = configService.get('DB_PATH', 'booking.db');
+        
+        // For fresh production deployments, enable synchronize if database doesn't exist
+        // This allows initial setup without migrations
+        let shouldSynchronize = !isProduction;
+        if (isProduction) {
+          const fs = require('fs');
+          const path = require('path');
+          const dbExists = fs.existsSync(dbPath);
+          if (!dbExists) {
+            shouldSynchronize = true;
+            console.log('⚠️  Fresh database detected - enabling synchronize for initial setup');
+          }
+        }
+        
+        return {
+          type: 'sqlite',
+          database: dbPath,
+          entities: [User, Building, Amenity, BookingRestriction, Booking, BookingLog, EmailTemplate],
+          synchronize: shouldSynchronize,
+          logging: configService.get('NODE_ENV') === 'development',
+        };
+      },
       inject: [ConfigService],
     }),
     ThrottlerModule.forRoot([
