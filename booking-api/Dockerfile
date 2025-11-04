@@ -17,9 +17,9 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
-# Copy only package.json for production install
-COPY package.json ./
-RUN npm ci --omit=dev
+# Copy package files for production install
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 VOLUME ["/data"]
 ENV DB_PATH=/data/booking.db
 EXPOSE 3000
