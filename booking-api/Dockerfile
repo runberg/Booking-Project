@@ -11,7 +11,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Build using npm script (uses Nest CLI with proper path resolution)
-RUN npm run build
+RUN npm run build && ls -la dist/ && ls -la dist/main* || (echo "Build failed or main file not found!" && exit 1)
 
 FROM node:20-alpine
 WORKDIR /app
