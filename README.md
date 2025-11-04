@@ -21,22 +21,52 @@ This repository ships generic deployment files using environment placeholders. D
 
 Copy `env.example` to `.env.production` (or `.env`) and fill in:
 
-```
+```bash
+# Domain and TLS
 APP_HOST=app.example.com  # Single domain for both frontend and API (path-based routing)
 LE_EMAIL=admin@example.com
+
+# Admin User (automatically created on first startup if not exists)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your_secure_admin_password_here
+
+# JWT Configuration (generate secure random strings)
+# Generate with: openssl rand -base64 32 (run twice for two different secrets)
+JWT_SECRET=your_super_secret_jwt_key_here_make_it_long_and_random
+JWT_REFRESH_SECRET=your_super_secret_refresh_jwt_key_here_make_it_long_and_random
+
+# SMTP (Gmail example)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_USER=your_email@gmail.com
 SMTP_PASS=your_app_password
 SMTP_FROM=your_email@gmail.com
+
 # Optional build-time absolute URL; otherwise app calls relative /api
 # VITE_API_BASE_URL=https://app.example.com/api
 ```
 
-### Start services
+**Generating JWT Secrets:**
+```bash
+# Generate JWT_SECRET
+openssl rand -base64 32
+
+# Generate JWT_REFRESH_SECRET (run again for a different value)
+openssl rand -base64 32
 ```
+
+Copy each generated value to your `.env` file.
+
+### Start services
+```bash
 docker compose --env-file .env.production build
 docker compose --env-file .env.production up -d
+```
+
+Or if using `.env` (recommended):
+```bash
+docker compose build
+docker compose up -d
 ```
 
 Traefik terminates TLS and routes both frontend and backend on the same domain using path-based routing:
@@ -48,7 +78,8 @@ Traefik terminates TLS and routes both frontend and backend on the same domain u
 ### Notes
 - The frontend uses relative `/api` path by default (no separate domain needed).
 - CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
-- SQLite database is persisted in the `db_data` volume at `/data/booking.db` inside the API container.
+- **Database:** SQLite database is persisted in the `./data` directory on the host (bind mount) at `./data/booking.db`. This makes it easy to backup and access directly.
+- **Auto-migrations:** Database migrations run automatically on container startup in production. Fresh databases will be initialized automatically using synchronize.
 
 ### Post-deployment: Update Content
 After deploying, log in as an admin and navigate to the Admin Dashboard → Content tab. You must update:
@@ -86,9 +117,9 @@ See `booking-api/MIGRATIONS.md` for detailed migration documentation.
 
 Use an App Password (Gmail requires 2‑Step Verification):
 
-1) Enable 2‑Step Verification: https://myaccount.google.com/security → “2‑Step Verification”.
+1) Enable 2‑Step Verification: https://myaccount.google.com/security → "2‑Step Verification".
 
-2) Create App Password: on the same page, open “App passwords” (or visit https://myaccount.google.com/apppasswords), select “Mail”, choose a device (or “Other”), click “Generate”, copy the 16‑char password.
+2) Create App Password: on the same page, open "App passwords" (or visit https://myaccount.google.com/apppasswords), select "Mail", choose a device (or "Other"), click "Generate", copy the 16‑char password.
 
 3) Configure env:
    - `SMTP_HOST=smtp.gmail.com`
@@ -100,7 +131,4 @@ Use an App Password (Gmail requires 2‑Step Verification):
 
 4) Test: trigger registration or a booking to verify delivery.
 
-Tips: If “App passwords” is missing, enable 2SV first or check Workspace admin policies. Ensure outbound 465/587 is allowed. For higher volume, consider SES/SendGrid/Mailgun.
-
-
-
+Tips: If "App passwords" is missing, enable 2SV first or check Workspace admin policies. Ensure outbound 465/587 is allowed. For higher volume, consider SES/SendGrid/Mailgun.
