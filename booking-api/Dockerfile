@@ -23,6 +23,6 @@ RUN npm ci --omit=dev --no-audit --no-fund
 VOLUME ["/data"]
 ENV DB_PATH=/data/booking.db
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/main"]
 
 
