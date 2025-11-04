@@ -49,7 +49,7 @@ services:
       - traefik.http.middlewares.api-strip.stripprefix.prefixes=/api
       - traefik.http.routers.api.middlewares=api-strip
     volumes:
-      - db_data:/data
+      - ./data:/data  # Bind mount - database accessible on host at ./data/booking.db
     networks: [public, internal]
     restart: always
 
@@ -73,7 +73,6 @@ networks:
   internal: {}
 
 volumes:
-  db_data: {}
   acme: {}
 
 
