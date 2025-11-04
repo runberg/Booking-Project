@@ -36,6 +36,8 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM}
       FRONTEND_URL: https://${APP_HOST}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     labels:
       - traefik.enable=true
       - traefik.http.routers.api.rule=Host(`${APP_HOST}`) && PathPrefix(`/api`)
