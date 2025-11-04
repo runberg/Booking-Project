@@ -11,7 +11,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Build using npm script (uses Nest CLI with proper path resolution)
-RUN npm run build && ls -la dist/ && ls -la dist/src/main* || (echo "Build failed or main file not found!" && exit 1)
+RUN npm run build && ls -la dist/ && ls -la dist/main* || (echo "Build failed or main file not found!" && exit 1)
 
 FROM node:20-alpine
 WORKDIR /app
@@ -23,6 +23,6 @@ RUN npm ci --omit=dev --no-audit --no-fund
 VOLUME ["/data"]
 ENV DB_PATH=/data/booking.db
 EXPOSE 3000
-CMD ["node", "dist/src/main"]
+CMD ["node", "dist/main"]
 
 
