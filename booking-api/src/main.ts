@@ -6,7 +6,7 @@ async function bootstrap() {
   // Run migrations automatically on startup (production only)
   if (process.env.NODE_ENV === 'production') {
     try {
-      const { runMigrations } = await import('./migrations/run-migrations');
+      const { runMigrations } = await import('./migrations/run-migrations.js');
       await runMigrations();
     } catch (error: any) {
       // If migrations fail, synchronize will handle fresh databases
