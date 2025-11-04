@@ -298,16 +298,18 @@ export const BookingPage: React.FC = () => {
       {/* Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 sm:py-6 gap-4">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Booking</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Booking</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">Welcome, {currentUser?.name} ({currentUser?.email})</span>
-              {currentUser?.role === 'admin' && (
-                <Button onClick={() => navigate('/admin')}>Admin Dashboard</Button>
-              )}
-              <Button variant="secondary" onClick={handleLogout}>Logout</Button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+              <span className="text-xs sm:text-sm text-gray-600 truncate">Welcome, {currentUser?.name}</span>
+              <div className="flex gap-2">
+                {currentUser?.role === 'admin' && (
+                  <Button onClick={() => navigate('/admin')} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Admin</Button>
+                )}
+                <Button variant="secondary" onClick={handleLogout} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Logout</Button>
+              </div>
             </div>
           </div>
         </div>
@@ -322,25 +324,25 @@ export const BookingPage: React.FC = () => {
             {upcoming.length === 0 ? (
               <p className="text-sm text-gray-600">No upcoming bookings.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-6 sm:mx-0">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amenity</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">When</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Building</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Apartment</th>
+                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amenity</th>
+                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">When</th>
+                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">User</th>
+                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Building</th>
+                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Apartment</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {upcoming.map((u) => (
                       <tr key={u.id}>
-                        <td className="px-4 py-2 text-sm text-gray-700">{u.amenityName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{formatIsoDateToDmy(u.date)} {u.startTime} ({u.slotLength} min)</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{u.userName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{u.building}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{u.apartmentNumber}</td>
+                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700">{u.amenityName}</td>
+                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700">{formatIsoDateToDmy(u.date)} {u.startTime} ({u.slotLength} min)</td>
+                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hidden sm:table-cell">{u.userName}</td>
+                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hidden md:table-cell">{u.building}</td>
+                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hidden md:table-cell">{u.apartmentNumber}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -358,12 +360,12 @@ export const BookingPage: React.FC = () => {
           ) : (
             <ul className="divide-y divide-gray-200">
               {myBookings.map((b) => (
-                <li key={b.id} className="py-3 text-sm text-gray-700 flex items-center justify-between">
-                  <div>
+                <li key={b.id} className="py-3 text-sm text-gray-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
                     <span className="font-medium">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</span>
-                    <span className="ml-2">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</span>
+                    <span className="ml-2 whitespace-nowrap">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</span>
                   </div>
-                  <Button variant="secondary" onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}>Delete</Button>
+                  <Button variant="secondary" onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })} className="w-full sm:w-auto text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Delete</Button>
                 </li>
               ))}
             </ul>
@@ -409,13 +411,13 @@ export const BookingPage: React.FC = () => {
           <div className="fixed inset-0 z-50">
             <div className="flex min-h-screen items-center justify-center p-4">
               <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setSelected(null)} />
-              <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl p-6">
+              <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900">{selected.name}</h3>
-                    <p className="text-sm text-gray-600">Select a date and time slot</p>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{selected.name}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600">Select a date and time slot</p>
                   </div>
-                  <button className="text-gray-500 hover:text-gray-700" onClick={() => setSelected(null)}>✕</button>
+                  <button className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl leading-none flex-shrink-0" onClick={() => setSelected(null)} aria-label="Close">✕</button>
                 </div>
 
                 {step === 'select' ? (
@@ -424,16 +426,16 @@ export const BookingPage: React.FC = () => {
                       Sorry! You have reached the limit of bookings as per the restrictions set for the amenity.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Select date</h4>
+                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Select date</h4>
                         {selected?.maxPerPeriod != null && selected?.maxPerDay != null && (
                           <p className="text-xs text-gray-600 mb-3">
                             Bookings can only be created {selected.daysAhead} days ahead of today. Only {selected.maxPerPeriod} bookings per user within this time period and only {selected.maxPerDay} bookings per user per day.
                           </p>
                         )}
-                        <div className="border border-gray-200 rounded-md p-3 max-h-80 overflow-y-auto">
-                          <div className="grid grid-cols-7 gap-2 mb-2 text-xs font-medium text-gray-600">
+                        <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
+                          <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">
                             <div className="text-center">Mon</div>
                             <div className="text-center">Tue</div>
                             <div className="text-center">Wed</div>
@@ -442,9 +444,9 @@ export const BookingPage: React.FC = () => {
                             <div className="text-center">Sat</div>
                             <div className="text-center">Sun</div>
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-1 sm:space-y-2">
                             {calendarWeeks.map((week, wi) => (
-                              <div key={wi} className="grid grid-cols-7 gap-2">
+                              <div key={wi} className="grid grid-cols-7 gap-1 sm:gap-2">
                                 {week.map((d, di) => {
                                   if (!d) return (<div key={`empty-${wi}-${di}`} className="py-2 text-xs text-center text-gray-300 border border-transparent">—</div>);
                                   const dayBookingsCount = myBookings.filter((b) => b.amenityId === (selected?.id || '') && b.date === d).length;
@@ -478,16 +480,16 @@ export const BookingPage: React.FC = () => {
                         </div>
                       </div>
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Available time slots</h4>
+                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Available time slots</h4>
                         {!selectedDate ? (
-                          <p className="text-sm text-gray-500">Select a date to see slots.</p>
+                          <p className="text-xs sm:text-sm text-gray-500">Select a date to see slots.</p>
                         ) : slots.length === 0 ? (
                           <div>
-                            <p className="text-sm text-gray-500">Sorry! - No available time slots</p>
-                            <div className="mt-3"><Button variant="secondary" onClick={() => setSelected(null)}>Close</Button></div>
+                            <p className="text-xs sm:text-sm text-gray-500">Sorry! - No available time slots</p>
+                            <div className="mt-3"><Button variant="secondary" onClick={() => setSelected(null)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Close</Button></div>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
                             {slots.map((t) => {
                               const isBooked = bookedTimes.includes(t);
                               return (

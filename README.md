@@ -55,7 +55,7 @@ openssl rand -base64 32
 openssl rand -base64 32
 ```
 
-Copy each generated value to your `.env` file.
+**Password Security:** All passwords (including admin passwords) are automatically hashed using bcrypt before storage in the database. The admin password set in `ADMIN_PASSWORD` is hashed when the admin user is created. User passwords are also hashed during registration and password resets.
 
 ### Start services
 ```bash

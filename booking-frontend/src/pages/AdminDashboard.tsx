@@ -288,22 +288,24 @@ export const AdminDashboard: React.FC = () => {
       {/* Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 sm:py-6 gap-4">
             <div className="flex items-center">
-              <Users className="h-8 w-8 text-primary-600" />
-              <h1 className="ml-3 text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+              <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary-600" />
+              <h1 className="ml-2 sm:ml-3 text-xl sm:text-2xl font-bold text-gray-900">Admin Dashboard</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
-                Welcome, {currentUser?.name} ({currentUser?.email})
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+              <span className="text-xs sm:text-sm text-gray-600 truncate">
+                Welcome, {currentUser?.name}
               </span>
-              <Button variant="secondary" onClick={() => navigate('/bookings')}>
-                Back to Bookings
-              </Button>
-              <Button variant="secondary" onClick={handleLogout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={() => navigate('/bookings')} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 flex-1 sm:flex-initial">
+                  Back to Bookings
+                </Button>
+                <Button variant="secondary" onClick={handleLogout} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">
+                  <LogOut className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Logout</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -314,33 +316,33 @@ export const AdminDashboard: React.FC = () => {
         <Card>
           {/* Tabs */}
           <div className="mb-6 border-b border-gray-200">
-            <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+            <nav className="-mb-px flex overflow-x-auto space-x-4 sm:space-x-6" aria-label="Tabs">
               <button
-                className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'users' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 text-xs sm:text-sm font-medium ${activeTab === 'users' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('users')}
               >
-                User Administration
+                Users
               </button>
               <button
-                className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'buildings' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 text-xs sm:text-sm font-medium ${activeTab === 'buildings' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('buildings')}
               >
                 Buildings
               </button>
               <button
-                className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'logs' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 text-xs sm:text-sm font-medium ${activeTab === 'logs' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('logs')}
               >
                 Logs
               </button>
               <button
-                className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'amenities' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 text-xs sm:text-sm font-medium ${activeTab === 'amenities' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('amenities')}
               >
                 Amenities
               </button>
               <button
-                className={`whitespace-nowrap py-4 px-1 border-b-2 text-sm font-medium ${activeTab === 'emails' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 text-xs sm:text-sm font-medium ${activeTab === 'emails' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('emails')}
               >
                 Content
@@ -350,21 +352,21 @@ export const AdminDashboard: React.FC = () => {
 
           {activeTab === 'users' && (
             <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">All Users</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">All Users</h2>
             <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">{users.length} users</span>
+              <span className="text-xs sm:text-sm text-gray-600">{users.length} users</span>
               {currentUser?.role === 'admin' && (
-                <Button variant="secondary" onClick={() => setCreateSuperOpen(true)}>Create Super User</Button>
+                <Button variant="secondary" onClick={() => setCreateSuperOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Super User</Button>
               )}
             </div>
           </div>
 
           <div className="mb-4">
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input
-                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                placeholder="Search users by name, email, building, apartment, role..."
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+                placeholder="Search users..."
                 value={usersQuery}
                 onChange={(e) => setUsersQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -374,7 +376,7 @@ export const AdminDashboard: React.FC = () => {
                   }
                 }}
               />
-              <Button variant="secondary" onClick={() => setUsersQuery((s) => s.trim())}>Search</Button>
+              <Button variant="secondary" onClick={() => setUsersQuery((s) => s.trim())} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 w-full sm:w-auto">Search</Button>
             </div>
           </div>
 
@@ -384,12 +386,12 @@ export const AdminDashboard: React.FC = () => {
               <p className="mt-2 text-sm text-gray-600">Loading users...</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-6 sm:mx-0">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                       onClick={() => {
                         const key: typeof usersSortBy = 'name';
                         const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
@@ -399,7 +401,7 @@ export const AdminDashboard: React.FC = () => {
                       User
                     </th>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell"
                       onClick={() => {
                         const key: typeof usersSortBy = 'building';
                         const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
@@ -409,7 +411,7 @@ export const AdminDashboard: React.FC = () => {
                       Building
                     </th>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                       onClick={() => {
                         const key: typeof usersSortBy = 'isEmailVerified';
                         const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
@@ -419,7 +421,7 @@ export const AdminDashboard: React.FC = () => {
                       Status
                     </th>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden md:table-cell"
                       onClick={() => {
                         const key: typeof usersSortBy = 'role';
                         const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
@@ -429,7 +431,7 @@ export const AdminDashboard: React.FC = () => {
                       Role
                     </th>
                     <th
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell"
                       onClick={() => {
                         const key: typeof usersSortBy = 'createdAt';
                         const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC';
@@ -438,7 +440,7 @@ export const AdminDashboard: React.FC = () => {
                     >
                       Created
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -478,17 +480,17 @@ export const AdminDashboard: React.FC = () => {
                     })
                     .map((user) => (
                     <tr key={user.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
+                          <div className="text-xs sm:text-sm font-medium text-gray-900">{user.name}</div>
+                          <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{user.building}</div>
-                        <div className="text-sm text-gray-500">Apt {user.apartmentNumber}</div>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden sm:table-cell">
+                        <div className="text-xs sm:text-sm text-gray-900">{user.building}</div>
+                        <div className="text-xs sm:text-sm text-gray-500">Apt {user.apartmentNumber}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           user.isEmailVerified 
                             ? 'bg-green-100 text-green-800' 
@@ -497,36 +499,38 @@ export const AdminDashboard: React.FC = () => {
                           {user.isEmailVerified ? 'Verified' : 'Pending'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden md:table-cell">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           user.role === 'admin' 
                             ? 'bg-purple-100 text-purple-800' 
+                            : user.role === 'super'
+                            ? 'bg-indigo-100 text-indigo-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}>
                           {user.role}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 hidden sm:table-cell">
                         {formatDateTimeDmy(user.createdAt).split(' ')[0]}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
+                        <div className="flex space-x-1 sm:space-x-2">
                           {!user.isEmailVerified && (
                             <Button
                               variant="secondary"
                               onClick={() => resendVerificationEmail(user.id)}
-                              className="text-blue-600 hover:text-blue-900"
+                              className="text-blue-600 hover:text-blue-900 p-1 sm:p-2"
                             >
-                              <Mail className="h-4 w-4" />
+                              <Mail className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           )}
                           {user.role !== 'admin' && user.role !== 'super' && (
                              <Button
                                variant="secondary"
                                onClick={() => handleDeleteClick(user.id, user.name)}
-                               className="text-red-600 hover:text-red-900"
+                               className="text-red-600 hover:text-red-900 p-1 sm:p-2"
                              >
-                               <Trash2 className="h-4 w-4" />
+                               <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                              </Button>
                            )}
                           {/* Admin-only role management */}
