@@ -26,6 +26,10 @@ services:
       - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
       - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
     networks: [public]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: always
 
   api:
     build: ./booking-api

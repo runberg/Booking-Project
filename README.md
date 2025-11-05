@@ -75,6 +75,39 @@ Traefik terminates TLS and routes both frontend and backend on the same domain u
 
 **DNS Setup:** Only one A record is needed: `APP_HOST` → your server IP.
 
+### Updating/Restarting Services
+
+**After pulling code changes:**
+```bash
+# Pull latest changes
+git pull origin main
+
+# Rebuild and restart (Traefik will automatically wait for API to be healthy)
+docker compose build --no-cache api web
+docker compose up -d
+
+# Or restart just the API if only backend changed:
+docker compose build --no-cache api
+docker compose restart api proxy  # Restart proxy to rediscover API
+```
+
+**⚠️ Important:** If you rebuild the API container, always restart both `api` and `proxy` together to ensure Traefik rediscoveries the API on the correct network. The `depends_on` configuration ensures Traefik waits for the API to be healthy, but restarting both prevents network discovery issues.
+
+**Check service status:**
+```bash
+# View all containers
+docker compose ps
+
+# Check API logs
+docker compose logs -f api
+
+# Check Traefik logs
+docker compose logs -f proxy
+
+# Test API connectivity
+docker compose exec proxy wget -q -O- --timeout=5 http://api:3000/health
+```
+
 ### Notes
 - The frontend uses relative `/api` path by default (no separate domain needed).
 - CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
