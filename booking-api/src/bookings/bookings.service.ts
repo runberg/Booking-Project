@@ -98,7 +98,7 @@ export class BookingsService {
 
   private async writeLog(action: 'create' | 'delete', b: Booking) {
     const user = await this.usersService.findById(b.userId);
-    const amenity = (await this.amenitiesService.listAll()).find((a) => a.id === b.amenityId);
+    const amenity = await this.amenitiesService.findOne(b.amenityId);
     const log = this.logsRepo.create({
       action,
       bookingId: b.id,

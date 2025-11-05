@@ -21,6 +21,10 @@ export class AmenitiesService {
     return this.amenitiesRepository.find({ order: { name: 'ASC' } });
   }
 
+  async findOne(id: string): Promise<Amenity | null> {
+    return this.amenitiesRepository.findOne({ where: { id } });
+  }
+
   async create(data: Partial<Amenity>): Promise<Amenity> {
     const existing = await this.amenitiesRepository.findOne({ where: { name: data.name } });
     if (existing) throw new ConflictException('Amenity with this name already exists');

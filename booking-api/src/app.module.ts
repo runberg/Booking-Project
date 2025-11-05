@@ -75,6 +75,12 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
           entities: [User, Building, Amenity, BookingRestriction, Booking, BookingLog, EmailTemplate],
           synchronize: shouldSynchronize,
           logging: configService.get('NODE_ENV') === 'development',
+          // Enable WAL mode for better concurrency and performance
+          extra: {
+            journalMode: 'WAL',
+            synchronous: 'NORMAL',
+            busyTimeout: 5000,
+          },
         };
       },
       inject: [ConfigService],

@@ -115,12 +115,11 @@ export class BookingsController {
       throw new ConflictException('This time slot is already booked');
     }
     // enforce period limit if restriction applies
-    const amenity = (await this.amenitiesService.listAll()).find((a) => a.id === body.amenityId);
+    const amenity = await this.amenitiesService.findOne(body.amenityId);
     let daysAhead = 14;
     let maxPerPeriod: number | null = null;
     if (amenity?.bookingRestrictionId) {
-      const r = await this.restrictionsService.listAll();
-      const rr = r.find((x) => x.id === amenity.bookingRestrictionId);
+      const rr = await this.restrictionsService.findOne(amenity.bookingRestrictionId);
       if (rr) {
         daysAhead = rr.daysAhead ?? daysAhead;
         maxPerPeriod = (rr.maxPerPeriod as any) ?? null;
@@ -141,7 +140,7 @@ export class BookingsController {
 
     // email confirmation (best-effort, template-based)
     try {
-      const amenity = (await this.amenitiesService.listAll()).find((a) => a.id === body.amenityId);
+      const amenity = await this.amenitiesService.findOne(body.amenityId);
       await this.emailService.sendTemplateEmail(
         req.user.email,
         'Booking Confirmation',

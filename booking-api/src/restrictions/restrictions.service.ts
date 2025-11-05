@@ -14,6 +14,10 @@ export class RestrictionsService {
     return this.restrictionsRepo.find({ order: { name: 'ASC' } });
   }
 
+  async findOne(id: string): Promise<BookingRestriction | null> {
+    return this.restrictionsRepo.findOne({ where: { id } });
+  }
+
   async listActive(): Promise<BookingRestriction[]> {
     return this.restrictionsRepo.find({ where: { isActive: true }, order: { name: 'ASC' } });
   }
