@@ -85,18 +85,16 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Sign in to your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Welcome back to our booking platform
-        </p>
+    <div className="min-h-screen bg-gray-50 py-12 sm:px-6 lg:px-8">
+      {/* Header */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
+        <h1 className="text-center text-3xl font-extrabold text-gray-900">
+          Booking System
+        </h1>
       </div>
 
       {/* Public Amenity Availability */}
-      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md space-y-4">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-4 mb-8">
         {amenities.map((a) => {
           const v = availability[a.id];
           const isFree = v?.status === 'free';
@@ -140,8 +138,15 @@ export const LoginPage: React.FC = () => {
         })}
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      {/* Sign In Options */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <Card>
+          <h2 className="text-center text-2xl font-semibold text-gray-900 mb-4">
+            Sign in to your account
+          </h2>
+          <p className="text-center text-sm text-gray-600 mb-6">
+            Welcome back to our booking platform
+          </p>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {(error || sessionMsg) && (
               <div className="bg-red-50 border border-red-200 rounded-md p-4">

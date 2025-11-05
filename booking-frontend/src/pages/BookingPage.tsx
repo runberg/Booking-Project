@@ -4,6 +4,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { api, authService } from '../services/authService';
 import { formatIsoDateToDmy } from '../utils/date';
+import { Trash2 } from 'lucide-react';
 
 type AmenityPublic = {
   id: string;
@@ -320,7 +321,10 @@ export const BookingPage: React.FC = () => {
 
         {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
           <Card>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Upcoming bookings (next 10)</h2>
+            <div className="mb-3">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Upcoming bookings</h2>
+              <p className="text-xs sm:text-sm text-gray-600">Next 10</p>
+            </div>
             {upcoming.length === 0 ? (
               <p className="text-sm text-gray-600">No upcoming bookings.</p>
             ) : (
@@ -354,18 +358,24 @@ export const BookingPage: React.FC = () => {
 
         <div className="mt-8">
         <Card>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">My bookings</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">My bookings</h2>
           {myBookings.length === 0 ? (
             <p className="text-sm text-gray-600">You have no bookings yet.</p>
           ) : (
             <ul className="divide-y divide-gray-200">
               {myBookings.map((b) => (
-                <li key={b.id} className="py-3 text-sm text-gray-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <li key={b.id} className="py-3 flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</span>
-                    <span className="ml-2 whitespace-nowrap">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</span>
+                    <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
+                    <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
                   </div>
-                  <Button variant="secondary" onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })} className="w-full sm:w-auto text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Delete</Button>
+                  <button
+                    onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}
+                    className="flex-shrink-0 p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                    aria-label="Delete booking"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -391,14 +401,14 @@ export const BookingPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {amenities.map((a) => (
               <Card key={a.id}>
-                <div className="flex items-start space-x-4">
-                  <img alt="amenity" src={a.imageUrl || placeholder} className="h-20 w-32 object-cover rounded" />
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900">{a.name}</h3>
-                    <p className="mt-1 text-sm text-gray-600">{a.description}</p>
-                    <div className="mt-3">
-                      <Button variant="secondary" onClick={() => { setSelected(a); setSelectedDate(''); setSelectedTime(''); setStep('select'); }}>Book</Button>
-                    </div>
+                <div className="flex flex-col">
+                  <img alt="amenity" src={a.imageUrl || placeholder} className="w-full h-48 object-cover rounded mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{a.name}</h3>
+                  {a.description && (
+                    <p className="text-sm text-gray-600 mb-4">{a.description}</p>
+                  )}
+                  <div>
+                    <Button variant="secondary" onClick={() => { setSelected(a); setSelectedDate(''); setSelectedTime(''); setStep('select'); }} className="w-full">Book</Button>
                   </div>
                 </div>
               </Card>
@@ -415,7 +425,6 @@ export const BookingPage: React.FC = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0 pr-2">
                     <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{selected.name}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600">Select a date and time slot</p>
                   </div>
                   <button className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl leading-none flex-shrink-0" onClick={() => setSelected(null)} aria-label="Close">✕</button>
                 </div>
@@ -426,14 +435,14 @@ export const BookingPage: React.FC = () => {
                       Sorry! You have reached the limit of bookings as per the restrictions set for the amenity.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-6">
+                      {selected?.maxPerPeriod != null && selected?.maxPerDay != null && (
+                        <p className="text-xs sm:text-sm text-gray-600">
+                          Bookings can only be created {selected.daysAhead} days ahead of today. Only {selected.maxPerPeriod} bookings per user within this time period and only {selected.maxPerDay} bookings per user per day.
+                        </p>
+                      )}
                       <div>
                         <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Select date</h4>
-                        {selected?.maxPerPeriod != null && selected?.maxPerDay != null && (
-                          <p className="text-xs text-gray-600 mb-3">
-                            Bookings can only be created {selected.daysAhead} days ahead of today. Only {selected.maxPerPeriod} bookings per user within this time period and only {selected.maxPerDay} bookings per user per day.
-                          </p>
-                        )}
                         <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
                           <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">
                             <div className="text-center">Mon</div>
@@ -468,6 +477,7 @@ export const BookingPage: React.FC = () => {
                                           return;
                                         }
                                         setSelectedDate(d);
+                                        setSelectedTime('');
                                       }}
                                     >
                                       {new Date(d).getDate()}
@@ -479,46 +489,46 @@ export const BookingPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Available time slots</h4>
-                        {!selectedDate ? (
-                          <p className="text-xs sm:text-sm text-gray-500">Select a date to see slots.</p>
-                        ) : slots.length === 0 ? (
-                          <div>
-                            <p className="text-xs sm:text-sm text-gray-500">Sorry! - No available time slots</p>
-                            <div className="mt-3"><Button variant="secondary" onClick={() => setSelected(null)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Close</Button></div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
-                            {slots.map((t) => {
-                              const isBooked = bookedTimes.includes(t);
-                              return (
-                                <button
-                                  key={t}
-                                  disabled={isBooked}
-                                  className={`border rounded-md py-2 px-2 text-sm ${
-                                    isBooked
-                                      ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
-                                      : selectedTime === t
-                                      ? 'border-primary-600 text-primary-700'
-                                      : 'border-gray-200 text-gray-700 hover:border-primary-600'
-                                  }`}
-                                  onClick={() => !isBooked && setSelectedTime(t)}
-                                >
-                                  {t}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
+                      {selectedDate && (
+                        <div>
+                          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Available time slots</h4>
+                          {slots.length === 0 ? (
+                            <div>
+                              <p className="text-xs sm:text-sm text-gray-500">Sorry! - No available time slots</p>
+                              <div className="mt-3"><Button variant="secondary" onClick={() => setSelected(null)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Close</Button></div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                              {slots.map((t) => {
+                                const isBooked = bookedTimes.includes(t);
+                                return (
+                                  <button
+                                    key={t}
+                                    disabled={isBooked}
+                                    className={`border rounded-md py-2 px-2 text-sm ${
+                                      isBooked
+                                        ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
+                                        : selectedTime === t
+                                        ? 'border-primary-600 text-primary-700'
+                                        : 'border-gray-200 text-gray-700 hover:border-primary-600'
+                                    }`}
+                                    onClick={() => !isBooked && setSelectedTime(t)}
+                                  >
+                                    {t}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 ) : (
                   <div>
                     <h4 className="text-sm font-medium text-gray-700 mb-4">Confirm your booking</h4>
                     <div className="space-y-2 text-sm text-gray-700">
-                      <div><span className="font-medium">Amenity:</span> {selected.name}</div>
+                      <div><span className="font-semibold">{selected.name}</span></div>
                       <div><span className="font-medium">Date:</span> {formatIsoDateToDmy(selectedDate)}</div>
                       <div><span className="font-medium">Time:</span> {selectedTime} ({selected.slotLength} min)</div>
                     </div>

@@ -118,11 +118,11 @@ export const AmenitiesAdmin: React.FC = () => {
 
       {/* Restrictions */}
       <div className="bg-white border border-gray-200 rounded-md p-4 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-md font-semibold text-gray-900">Amenity Booking Restrictions</h3>
-          <div className="flex items-center space-x-3">
-            <Button variant="secondary" onClick={() => setCreateRestrictionOpen(true)}>Add Restriction</Button>
-          </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
+          <h3 className="text-md font-semibold text-gray-900 mb-2 sm:mb-0">Amenity Booking Restrictions</h3>
+        </div>
+        <div className="mb-4">
+          <Button variant="secondary" onClick={() => setCreateRestrictionOpen(true)}>Add Restriction</Button>
         </div>
         {restrictions.length === 0 ? (
           <div className="bg-gray-50 border border-gray-200 rounded-md p-6 text-center text-gray-600">
@@ -224,8 +224,10 @@ export const AmenitiesAdmin: React.FC = () => {
 
       {/* List */}
       <div className="bg-white border border-gray-200 rounded-md p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-md font-semibold text-gray-900">Amenities</h3>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
+          <h3 className="text-md font-semibold text-gray-900 mb-2 sm:mb-0">Amenities</h3>
+        </div>
+        <div className="mb-4">
           <Button onClick={() => setCreateOpen(true)} variant="secondary" disabled={!restrictions.length}>Add Amenity</Button>
         </div>
         {isLoading ? (

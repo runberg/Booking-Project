@@ -4,7 +4,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Notification } from '../components/Notification';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
-import { Users, LogOut, Trash2, Mail } from 'lucide-react';
+import { Users, LogOut, Trash2, Mail, Menu, X } from 'lucide-react';
 import { AmenitiesAdmin } from './AmenitiesAdmin';
 import { authService, api, API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
@@ -46,6 +46,7 @@ export const AdminDashboard: React.FC = () => {
     userName: '',
   });
   const [activeTab, setActiveTab] = useState<'users' | 'buildings' | 'amenities' | 'logs' | 'emails'>('users');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Buildings state
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -316,7 +317,38 @@ export const AdminDashboard: React.FC = () => {
         <Card>
           {/* Tabs */}
           <div className="mb-6 border-b border-gray-200">
-            <nav className="-mb-px flex overflow-x-auto space-x-4 sm:space-x-6" aria-label="Tabs">
+            {/* Mobile burger menu */}
+            <div className="sm:hidden">
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="flex items-center justify-between w-full py-3 px-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                <span>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</span>
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+              {mobileMenuOpen && (
+                <div className="border-t border-gray-200 py-2">
+                  {(['users', 'buildings', 'logs', 'amenities', 'emails'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      className={`w-full text-left py-2 px-4 text-sm font-medium ${
+                        activeTab === tab
+                          ? 'bg-primary-50 text-primary-600 border-l-4 border-primary-600'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                      onClick={() => {
+                        setActiveTab(tab);
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      {tab === 'emails' ? 'Content' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Desktop tabs */}
+            <nav className="hidden sm:flex -mb-px space-x-4 sm:space-x-6" aria-label="Tabs">
               <button
                 className={`whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 text-xs sm:text-sm font-medium ${activeTab === 'users' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 onClick={() => setActiveTab('users')}
@@ -818,7 +850,7 @@ export const AdminDashboard: React.FC = () => {
             <div>
               <div className="mb-4">
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Logs</h2>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                     placeholder="Search across all log fields..."
@@ -831,7 +863,7 @@ export const AdminDashboard: React.FC = () => {
                       }
                     }}
                   />
-                  <Button variant="secondary" onClick={() => { setLogsPage(1); fetchLogs({ page: 1 }); }}>Search</Button>
+                  <Button variant="secondary" onClick={() => { setLogsPage(1); fetchLogs({ page: 1 }); }} className="w-full sm:w-auto">Search</Button>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -890,15 +922,19 @@ export const AdminDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-gray-600">Page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsPageSize))}</div>
-                <div className="space-x-2">
-                  <Button variant="secondary" onClick={() => { if (logsPage > 1) { const newPage = logsPage - 1; setLogsPage(newPage); fetchLogs({ page: newPage }); }}}>
-                    Prev
-                  </Button>
-                  <Button variant="secondary" onClick={() => { const maxPage = Math.max(1, Math.ceil(logsTotal / logsPageSize)); if (logsPage < maxPage) { const newPage = logsPage + 1; setLogsPage(newPage); fetchLogs({ page: newPage }); }}}>
-                    Next
-                  </Button>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+                  <div className="text-sm text-gray-600">Page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsPageSize))}</div>
+                  <div className="flex space-x-2">
+                    <Button variant="secondary" onClick={() => { if (logsPage > 1) { const newPage = logsPage - 1; setLogsPage(newPage); fetchLogs({ page: newPage }); }}}>
+                      Prev
+                    </Button>
+                    <Button variant="secondary" onClick={() => { const maxPage = Math.max(1, Math.ceil(logsTotal / logsPageSize)); if (logsPage < maxPage) { const newPage = logsPage + 1; setLogsPage(newPage); fetchLogs({ page: newPage }); }}}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+                <div>
                   <Button variant="secondary" onClick={async () => {
                     try {
                       const params = new URLSearchParams();
