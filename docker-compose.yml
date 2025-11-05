@@ -53,6 +53,7 @@ services:
       - traefik.http.routers.api.middlewares=api-strip
       - traefik.http.services.api.loadbalancer.healthcheck.path=/health
       - traefik.http.services.api.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.api.loadbalancer.healthcheck.timeout=5s
     volumes:
       - ./data:/data  # Bind mount - database accessible on host at ./data/booking.db
     networks: [public, internal]
