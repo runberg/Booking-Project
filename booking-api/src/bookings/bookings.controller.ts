@@ -138,21 +138,23 @@ export class BookingsController {
     }
     const booking = await this.bookingsService.create({ userId, ...body });
 
-    // email confirmation (best-effort, template-based)
-    try {
-      const amenity = await this.amenitiesService.findOne(body.amenityId);
-      await this.emailService.sendTemplateEmail(
-        req.user.email,
-        'Booking Confirmation',
-        'booking_confirmation',
-        {
-          name: req.user.name,
-          amenity: amenity?.name ?? 'Amenity',
-          date: body.date,
-          time: body.startTime,
-        },
-      );
-    } catch {}
+    // email confirmation (best-effort, non-blocking)
+    (async () => {
+      try {
+        const amenity = await this.amenitiesService.findOne(body.amenityId);
+        await this.emailService.sendTemplateEmail(
+          req.user.email,
+          'Booking Confirmation',
+          'booking_confirmation',
+          {
+            name: req.user.name,
+            amenity: amenity?.name ?? 'Amenity',
+            date: body.date,
+            time: body.startTime,
+          },
+        );
+      } catch {}
+    })();
 
     return booking;
   }

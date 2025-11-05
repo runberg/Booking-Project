@@ -8,15 +8,22 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor(private configService: ConfigService, private templates: EmailTemplatesService) {
+    const host = this.configService.get('SMTP_HOST', 'smtp.gmail.com');
+    const port = Number(this.configService.get('SMTP_PORT', 587));
+    const secure = port === 465; // use TLS for 465
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get('SMTP_HOST', 'smtp.gmail.com'),
-      port: this.configService.get('SMTP_PORT', 587),
-      secure: false,
+      host,
+      port,
+      secure,
       auth: {
         user: this.configService.get('SMTP_USER'),
         pass: this.configService.get('SMTP_PASS'),
       },
-    });
+      // Timeouts to avoid long hangs in production
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 7000,
+    } as any);
   }
 
   private renderTemplateBody(body: string, variables: Record<string, string>): string {
