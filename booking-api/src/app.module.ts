@@ -42,24 +42,32 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
           try {
             // Check if database file exists and has content
             const dbExists = fs.existsSync(dbPath);
+            console.log(`📊 Database check: path=${dbPath}, exists=${dbExists}`);
             if (!dbExists) {
               shouldSynchronize = true;
               console.log('⚠️  Fresh database detected - enabling synchronize for initial setup');
             } else {
-              // Check if database has tables by trying to read it
+              // Check database file size - if it's very small, it's likely empty
               const stats = fs.statSync(dbPath);
-              // If database file is very small (< 100 bytes), it's likely empty
-              if (stats.size < 100) {
+              console.log(`📊 Database size: ${stats.size} bytes`);
+              // SQLite database files with tables are typically > 2KB even when empty
+              // If smaller than 2KB, assume it needs tables created
+              if (stats.size < 2048) {
                 shouldSynchronize = true;
-                console.log('⚠️  Empty database detected - enabling synchronize for initial setup');
+                console.log('⚠️  Database appears empty or corrupted - enabling synchronize for initial setup');
+              } else {
+                console.log('✅ Database exists and appears to have content - synchronize disabled');
               }
             }
-          } catch (error) {
+          } catch (error: any) {
             // If we can't check, assume it's fresh and enable synchronize
             shouldSynchronize = true;
             console.log('⚠️  Could not verify database state - enabling synchronize for initial setup');
+            console.log(`   Error: ${error.message || error}`);
           }
         }
+        
+        console.log(`📊 Database configuration: synchronize=${shouldSynchronize}, path=${dbPath}`);
         
         return {
           type: 'sqlite',
