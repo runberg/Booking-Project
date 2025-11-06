@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EmailService } from '../email/email.service';
 import { AmenitiesService } from '../amenities/amenities.service';
 import { RestrictionsService } from '../restrictions/restrictions.service';
-import { Throttle, ThrottlerException } from '@nestjs/throttler';
+import { Throttle, ThrottlerException, SkipThrottle } from '@nestjs/throttler';
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 @Controller('bookings')
@@ -24,6 +24,7 @@ export class BookingsController {
   }
 
   @Get('upcoming')
+  @SkipThrottle()
   async listUpcoming(@Request() req) {
     if (req.user?.role !== 'admin') {
       throw new ConflictException('Unauthorized');

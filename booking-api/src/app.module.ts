@@ -86,7 +86,7 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
       inject: [ConfigService],
     }),
     ThrottlerModule.forRoot([
-      { ttl: 60_000, limit: 30 }, // 30 req/min/IP
+      { ttl: 60_000, limit: 60 }, // 60 req/min/IP (increased from 30 to handle normal browsing)
     ]),
     AuthModule,
     UsersModule,
