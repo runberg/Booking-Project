@@ -26,6 +26,10 @@ Copy `env.example` to `.env.production` (or `.env`) and fill in:
 APP_HOST=app.example.com  # Single domain for both frontend and API (path-based routing)
 LE_EMAIL=admin@example.com
 
+# Timezone (e.g., Asia/Dubai, Europe/Copenhagen, America/New_York)
+# See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones for valid values
+TZ=UTC
+
 # Admin User (automatically created on first startup if not exists)
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_secure_admin_password_here
