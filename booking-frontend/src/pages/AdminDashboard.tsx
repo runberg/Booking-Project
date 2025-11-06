@@ -32,6 +32,7 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -161,7 +162,9 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const resendVerificationEmail = async (userId: string) => {
+    if (resendingEmail) return; // Prevent double-clicks
     try {
+      setResendingEmail(userId);
       await api.post(`/admin/users/${userId}/resend-verification`);
       setNotification({
         type: 'success',
@@ -172,6 +175,8 @@ export const AdminDashboard: React.FC = () => {
         type: 'error',
         message: err.response?.data?.message || err.message || 'Failed to resend verification email',
       });
+    } finally {
+      setResendingEmail(null);
     }
   };
 
@@ -551,15 +556,18 @@ export const AdminDashboard: React.FC = () => {
                             <Button
                               variant="secondary"
                               onClick={() => resendVerificationEmail(user.id)}
+                              disabled={resendingEmail === user.id}
+                              title="Resend verification email"
                               className="text-blue-600 hover:text-blue-900 p-1 sm:p-2"
                             >
-                              <Mail className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <Mail className={`h-3 w-3 sm:h-4 sm:w-4 ${resendingEmail === user.id ? 'animate-pulse' : ''}`} />
                             </Button>
                           )}
                           {user.role !== 'admin' && user.role !== 'super' && (
                              <Button
                                variant="secondary"
                                onClick={() => handleDeleteClick(user.id, user.name)}
+                               title="Delete user"
                                className="text-red-600 hover:text-red-900 p-1 sm:p-2"
                              >
                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />

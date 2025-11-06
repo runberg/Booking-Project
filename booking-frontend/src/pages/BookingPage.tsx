@@ -51,6 +51,35 @@ export const BookingPage: React.FC = () => {
     return count >= (selected.maxPerPeriod || 0);
   }, [selected, myBookings]);
 
+  // Helper function to find next booking for an amenity (for admins)
+  const getNextBookingForAmenity = (amenityId: string) => {
+    if (!(currentUser?.role === 'admin' || currentUser?.role === 'super')) return null;
+    const amenity = amenities.find((a) => a.id === amenityId);
+    if (!amenity) return null;
+    
+    // Find the next booking for this amenity by matching amenity name
+    const now = new Date();
+    const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    // Filter upcoming bookings for this amenity that are in the future
+    const futureBookings = upcoming
+      .filter((b) => b.amenityName === amenity.name)
+      .filter((b) => {
+        // Check if booking is in the future
+        if (b.date > nowStr) return true;
+        if (b.date === nowStr && b.startTime >= nowTime) return true;
+        return false;
+      })
+      .sort((a, b) => {
+        // Sort by date first, then time
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.startTime.localeCompare(b.startTime);
+      });
+    
+    return futureBookings.length > 0 ? futureBookings[0] : null;
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -83,15 +112,6 @@ export const BookingPage: React.FC = () => {
       setUpcoming(data);
     } catch {}
   };
-
-  // Lightweight polling to keep Upcoming bookings fresh for admins
-  useEffect(() => {
-    if (!(currentUser?.role === 'admin' || currentUser?.role === 'super')) return;
-    const id = setInterval(() => {
-      refreshUpcomingIfAdmin();
-    }, 10000); // every 10s
-    return () => clearInterval(id);
-  }, [currentUser]);
 
   useEffect(() => {
     const loadBookingLegalText = async () => {
@@ -319,43 +339,81 @@ export const BookingPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="sr-only">Book an Amenity</h1>
 
-        {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
-          <Card>
-            <div className="mb-3">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Upcoming bookings</h2>
-              <p className="text-xs sm:text-sm text-gray-600">Next 10</p>
-            </div>
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-gray-600">No upcoming bookings.</p>
-            ) : (
-              <div className="overflow-x-auto -mx-6 sm:mx-0">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amenity</th>
-                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">When</th>
-                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">User</th>
-                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Building</th>
-                      <th className="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Apartment</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {upcoming.map((u) => (
-                      <tr key={u.id}>
-                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700">{u.amenityName}</td>
-                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700">{formatIsoDateToDmy(u.date)} {u.startTime} ({u.slotLength} min)</td>
-                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hidden sm:table-cell">{u.userName}</td>
-                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hidden md:table-cell">{u.building}</td>
-                        <td className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hidden md:table-cell">{u.apartmentNumber}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4 text-sm text-red-700">{error}</div>
         )}
 
+        {/* Amenities Section - Full width cards */}
+        <div className="mt-8">
+        {isLoading ? (
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
+          </div>
+        ) : amenities.length === 0 ? (
+          <Card>
+            <p className="text-sm text-gray-600">No amenities are currently available for booking.</p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {amenities.map((a) => {
+              const nextBooking = getNextBookingForAmenity(a.id);
+              return (
+                <Card key={a.id}>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    {/* Photo */}
+                    <div className="flex-shrink-0 w-full sm:w-48">
+                      <img alt="amenity" src={a.imageUrl || placeholder} className="w-full h-32 sm:h-36 object-cover rounded" />
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900">{a.name}</h3>
+                          {a.description && (
+                            <p className="text-sm text-gray-600 mt-1">{a.description}</p>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0">
+                          <Button 
+                            variant="secondary" 
+                            onClick={() => { setSelected(a); setSelectedDate(''); setSelectedTime(''); setStep('select'); }} 
+                            className="w-full sm:w-auto"
+                          >
+                            Book
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Next booking info for admins */}
+                      {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          {nextBooking ? (
+                            <div className="text-xs sm:text-sm">
+                              <span className="font-medium text-gray-700">Next booking: </span>
+                              <span className="text-gray-600">
+                                {formatIsoDateToDmy(nextBooking.date)} {nextBooking.startTime} ({nextBooking.slotLength} min)
+                              </span>
+                              <span className="text-gray-500 ml-2">
+                                - {nextBooking.userName} ({nextBooking.building}, Apt {nextBooking.apartmentNumber})
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-xs sm:text-sm text-gray-500">No upcoming bookings</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+        </div>
+
+        {/* My Bookings Section */}
         <div className="mt-8">
         <Card>
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">My bookings</h2>
@@ -381,40 +439,6 @@ export const BookingPage: React.FC = () => {
             </ul>
           )}
         </Card>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4 text-sm text-red-700">{error}</div>
-        )}
-
-        <div className="mt-8">
-        {isLoading ? (
-          <div className="text-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
-          </div>
-        ) : amenities.length === 0 ? (
-          <Card>
-            <p className="text-sm text-gray-600">No amenities are currently available for booking.</p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {amenities.map((a) => (
-              <Card key={a.id}>
-                <div className="flex flex-col">
-                  <img alt="amenity" src={a.imageUrl || placeholder} className="w-full h-48 object-cover rounded mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{a.name}</h3>
-                  {a.description && (
-                    <p className="text-sm text-gray-600 mb-4">{a.description}</p>
-                  )}
-                  <div>
-                    <Button variant="secondary" onClick={() => { setSelected(a); setSelectedDate(''); setSelectedTime(''); setStep('select'); }} className="w-full">Book</Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
         </div>
 
         {selected && (
