@@ -79,6 +79,7 @@ openssl rand -base64 32
   2. Clear the `COMPOSE_PROFILES` value (leave it blank or remove the line) so Docker Compose skips the bundled proxy.
   3. Point `TRAEFIK_NETWORK_NAME` at the shared Docker network (for example, `traefik-proxy`) and set `TRAEFIK_NETWORK_IS_EXTERNAL=true`.
   4. Update `TRAEFIK_PING_URL` if the shared Traefik exposes `/ping` on a different host or port.
+  5. The compose file automatically adds `traefik.docker.network=${TRAEFIK_NETWORK_NAME}` to both services so Traefik resolves the correct container IP; double-check that the name matches the network your external proxy uses.
 
 When `USE_INTERNAL_TRAEFIK=false`, both the API and the frontend perform a startup probe against `TRAEFIK_PING_URL`. If the proxy is unreachable, the containers exit with a helpful error message so you can fix the network wiring before the stack comes online.
 
