@@ -2,6 +2,54 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 
+const DEFAULT_TRAEFIK_PING_URL = 'http://proxy:8080/ping';
+
+async function ensureTraefikAvailability() {
+  const useInternalProxy = process.env.USE_INTERNAL_TRAEFIK !== 'false';
+  if (useInternalProxy) {
+    return;
+  }
+
+  const pingUrl = process.env.TRAEFIK_PING_URL || DEFAULT_TRAEFIK_PING_URL;
+  const retries = Number.parseInt(process.env.TRAEFIK_PING_RETRIES || '5', 10);
+  const backoffSeconds = Number.parseInt(process.env.TRAEFIK_PING_DELAY_SECONDS || '2', 10);
+  const timeoutMs = Number.parseInt(process.env.TRAEFIK_PING_TIMEOUT_MS || '3000', 10);
+
+  console.log(`🔍 USE_INTERNAL_TRAEFIK=false - verifying external Traefik at ${pingUrl} ...`);
+
+  for (let attempt = 1; attempt <= Math.max(retries, 1); attempt += 1) {
+    try {
+      const response = await fetch(pingUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Received status ${response.status}`);
+      }
+
+      console.log('✅ External Traefik is reachable. Continuing startup.');
+      return;
+    } catch (error: any) {
+      const hint =
+        'Make sure this service is attached to the same Docker network as Traefik and that the /ping endpoint is enabled.';
+      console.warn(
+        `⚠️  Traefik check failed (attempt ${attempt}/${retries}): ${error?.message ?? error}. ${attempt < retries ? 'Retrying...' : ''}`,
+      );
+
+      if (attempt >= retries) {
+        console.error('❌ Could not verify external Traefik availability.');
+        console.error('   • Hint:', hint);
+        console.error('   • Current ping URL:', pingUrl);
+        console.error('   • To fall back to the built-in proxy, set USE_INTERNAL_TRAEFIK=true');
+        process.exit(1);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, backoffSeconds * 1000));
+    }
+  }
+}
+
 async function bootstrap() {
   console.log('🚀 Starting NestJS application...');
   
@@ -20,6 +68,8 @@ async function bootstrap() {
 
   console.log('📦 Creating NestJS application...');
   try {
+    await ensureTraefikAvailability();
+
     const app = await NestFactory.create<NestFastifyApplication>(
       AppModule,
       new FastifyAdapter({ logger: true, bodyLimit: 2 * 1024 * 1024 }), // 2 MB

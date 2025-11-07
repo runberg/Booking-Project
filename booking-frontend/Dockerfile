@@ -17,6 +17,10 @@ RUN ./node_modules/.bin/vite build || (echo "Vite not found, installing locally.
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
+RUN chmod +x /usr/local/bin/nginx-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/nginx-entrypoint.sh"]
 EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
 
 

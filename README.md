@@ -22,6 +22,16 @@ This repository ships generic deployment files using environment placeholders. D
 Copy `env.example` to `.env.production` (or `.env`) and fill in:
 
 ```bash
+# Traefik mode (leave as-is for the built-in proxy)
+USE_INTERNAL_TRAEFIK=true
+TRAEFIK_NETWORK_NAME=booking-project-proxy
+TRAEFIK_NETWORK_IS_EXTERNAL=false
+TRAEFIK_PING_URL=http://proxy:8080/ping
+# Optional tweaks for the external proxy health check
+#TRAEFIK_PING_RETRIES=5
+#TRAEFIK_PING_DELAY_SECONDS=2
+#TRAEFIK_PING_TIMEOUT_MS=3000
+
 # Domain and TLS
 APP_HOST=app.example.com  # Single domain for both frontend and API (path-based routing)
 LE_EMAIL=admin@example.com
@@ -60,6 +70,17 @@ openssl rand -base64 32
 ```
 
 **Password Security:** All passwords (including admin passwords) are automatically hashed using bcrypt before storage in the database. The admin password set in `ADMIN_PASSWORD` is hashed when the admin user is created. User passwords are also hashed during registration and password resets.
+
+### Selecting Traefik mode
+
+- `USE_INTERNAL_TRAEFIK=true` (default) keeps the stack self-contained. The `.env` also sets `COMPOSE_PROFILES=internal-traefik`, so a plain `docker compose up -d` will start Traefik alongside the API and frontend.
+- To reuse an existing Traefik deployment:
+  1. Set `USE_INTERNAL_TRAEFIK=false`.
+  2. Clear the `COMPOSE_PROFILES` value (leave it blank or remove the line) so Docker Compose skips the bundled proxy.
+  3. Point `TRAEFIK_NETWORK_NAME` at the shared Docker network (for example, `traefik-proxy`) and set `TRAEFIK_NETWORK_IS_EXTERNAL=true`.
+  4. Update `TRAEFIK_PING_URL` if the shared Traefik exposes `/ping` on a different host or port.
+
+When `USE_INTERNAL_TRAEFIK=false`, both the API and the frontend perform a startup probe against `TRAEFIK_PING_URL`. If the proxy is unreachable, the containers exit with a helpful error message so you can fix the network wiring before the stack comes online.
 
 ### Start services
 ```bash
@@ -111,6 +132,15 @@ docker compose logs -f proxy
 # Test API connectivity
 docker compose exec proxy wget -q -O- --timeout=5 http://api:3000/health
 ```
+
+### External Traefik reference stack
+
+Need a reusable Traefik instance that fronts multiple projects? See `examples/traefik/docker-compose.external-traefik.example.yml` for a sample stack that:
+- Creates a shared network (`traefik-proxy`).
+- Enables automatic HTTPS with ACME (Let’s Encrypt TLS challenge).
+- Enables the dashboard internally on `http://traefik:8080` (secured with Basic Auth). Expose it to the host only if you uncomment the provided port mapping.
+
+Start it once, and point this project at the shared network by setting `USE_INTERNAL_TRAEFIK=false`, updating `TRAEFIK_NETWORK_NAME`, and flipping `TRAEFIK_NETWORK_IS_EXTERNAL=true`. If you plan to view the dashboard, provide values for `TRAEFIK_DASHBOARD_HOST` and `DASHBOARD_USER_HASH`, then curl it from another container (or via SSH tunnel) with the matching Host header. Only uncomment the `8080:8080` mapping when you explicitly want host-level access, and keep it firewalled.
 
 ### Notes
 - The frontend uses relative `/api` path by default (no separate domain needed).

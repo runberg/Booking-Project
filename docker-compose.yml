@@ -1,6 +1,7 @@
 services:
   proxy:
     image: traefik:v3.0
+    profiles: [internal-traefik]
     command:
       - --providers.docker=true
       - --providers.docker.exposedByDefault=false
@@ -37,6 +38,8 @@ services:
       NODE_ENV: production
       DB_PATH: /data/booking.db
       TZ: ${TZ:-UTC}
+      USE_INTERNAL_TRAEFIK: ${USE_INTERNAL_TRAEFIK:-true}
+      TRAEFIK_PING_URL: ${TRAEFIK_PING_URL:-http://proxy:8080/ping}
       CORS_ORIGIN: https://${APP_HOST}
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
@@ -72,6 +75,9 @@ services:
 
   web:
     build: ./booking-frontend
+    environment:
+      USE_INTERNAL_TRAEFIK: ${USE_INTERNAL_TRAEFIK:-true}
+      TRAEFIK_PING_URL: ${TRAEFIK_PING_URL:-http://proxy:8080/ping}
     # Frontend uses relative /api path by default (no configuration needed)
     # Only uncomment below if you need to override the API URL at build-time:
     # environment:
@@ -86,7 +92,9 @@ services:
     restart: always
 
 networks:
-  public: {}
+  public:
+    name: ${TRAEFIK_NETWORK_NAME:-booking-project-proxy}
+    external: ${TRAEFIK_NETWORK_IS_EXTERNAL:-false}
   internal: {}
 
 volumes:
