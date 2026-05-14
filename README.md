@@ -97,8 +97,9 @@ Traefik creates the `traefik-proxy` Docker network automatically. Every project 
 ### Step 2 — Deploy the Booking System
 
 ```bash
-git clone https://github.com/runberg/Booking-Project.git
-cd Booking-Project
+mkdir booking-project && cd booking-project
+curl -O https://raw.githubusercontent.com/runberg/Booking-Project/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/runberg/Booking-Project/main/env.example
 cp env.example .env
 ```
 
