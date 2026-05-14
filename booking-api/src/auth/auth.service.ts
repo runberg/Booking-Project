@@ -160,7 +160,7 @@ export class AuthService {
   }
 
   async contactAdmin(dto: ContactAdminDto): Promise<{ message: string }> {
-    const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL') ?? '';
     const body =
       `A registration enquiry has been submitted via the website.\n\n` +
       `Name: ${dto.name}\n` +
