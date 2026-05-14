@@ -11,7 +11,7 @@ import { formatDateTimeDmy } from '../utils/date';
 import type { LoginData } from '../types/auth';
 
 const loginSchema = yup.object({
-  email: yup.string().email('Invalid email address').required('Email is required'),
+  email: yup.string().required('Email or username is required'),
   password: yup.string().required('Password is required'),
 });
 
@@ -159,9 +159,9 @@ export const LoginPage: React.FC = () => {
             )}
 
             <Input
-              label="Email Address"
-              type="email"
-              placeholder="Enter your email"
+              label="Email or username"
+              type="text"
+              placeholder="Enter your email or username"
               error={errors.email?.message}
               required
               {...register('email')}
@@ -175,14 +175,6 @@ export const LoginPage: React.FC = () => {
               required
               {...register('password')}
             />
-
-            <div className="flex items-center justify-between">
-              <div className="text-sm">
-                <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
-                  Forgot your password?
-                </a>
-              </div>
-            </div>
 
             <Button
               type="submit"

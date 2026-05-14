@@ -45,8 +45,7 @@ import { SecurityModule } from './security/security.module';
           EmailTemplate,
           Setting,
         ],
-        // synchronize auto-creates tables on startup.
-        // For schema changes after initial deploy, generate TypeORM migrations instead.
+        // synchronize creates/alters tables automatically on every startup.
         synchronize: true,
         logging: configService.get('NODE_ENV') === 'development',
       }),

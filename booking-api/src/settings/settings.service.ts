@@ -1,8 +1,16 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Setting } from './setting.entity';
+
+const ALLOWED_KEYS = new Set([
+  'smtp_host',
+  'smtp_port',
+  'smtp_user',
+  'smtp_pass',
+  'smtp_from',
+]);
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
@@ -40,6 +48,9 @@ export class SettingsService implements OnModuleInit {
   }
 
   async set(key: string, value: string | null): Promise<void> {
+    if (!ALLOWED_KEYS.has(key)) {
+      throw new BadRequestException(`Unknown setting key: ${key}`);
+    }
     await this.repo.upsert({ key, value }, ['key']);
     this.cache.delete(key);
   }

@@ -209,7 +209,9 @@ export class BookingsController {
             time: body.startTime,
           },
         );
-      } catch {}
+      } catch (e) {
+        console.error('Booking confirmation email failed:', e);
+      }
     })();
 
     return booking;

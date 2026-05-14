@@ -20,12 +20,14 @@ import {
 } from './dto/auth.dto';
 import { AuthResponseDto } from './dto/response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { ttl: 3_600_000, limit: 10 } })
   async register(
     @Body() registerDto: RegisterDto,
   ): Promise<{ message: string }> {
@@ -69,7 +71,7 @@ export class AuthController {
     return this.authService.contactAdmin(dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refreshToken(@Request() req): Promise<AuthResponseDto> {

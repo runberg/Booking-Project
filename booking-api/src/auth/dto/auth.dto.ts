@@ -4,6 +4,7 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  Length,
 } from 'class-validator';
 
 export class ContactAdminDto {
@@ -61,15 +62,20 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  @IsEmail()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(254)
   email: string;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(128)
   password: string;
 }
 
 export class VerifyEmailDto {
   @IsString()
+  @Length(64, 64)
   token: string;
 }
 
@@ -80,6 +86,7 @@ export class ForgotPasswordDto {
 
 export class ResetPasswordDto {
   @IsString()
+  @Length(64, 64)
   token: string;
 
   @IsString()

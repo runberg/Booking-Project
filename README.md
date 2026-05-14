@@ -241,21 +241,39 @@ The `traefik-ready` service verifies Traefik is reachable before the app contain
 | `FRONTEND_URL` | Yes | — | Full app URL, e.g. `https://booking.yourdomain.com` (used in emails) |
 | `CORS_ORIGIN` | Yes | — | Allowed CORS origin — should match `FRONTEND_URL` |
 | `TZ` | No | `UTC` | Timezone for the API container |
-| `SMTP_HOST` | No | — | SMTP hostname. Leave blank to disable email. |
-| `SMTP_PORT` | No | `587` | SMTP port |
-| `SMTP_USER` | No | — | SMTP username |
-| `SMTP_PASS` | No | — | SMTP password |
-| `SMTP_FROM` | No | — | From address for outgoing emails |
 
 ---
 
-## Post-deployment
+## Before going live
 
-Log in as the admin user and visit **Admin → Content** to customise:
-- Rules and Regulations shown during registration and booking
+After the first deployment, log in as admin and complete all three steps below before sharing the system with residents. The admin dashboard will show a warning banner for each item that is not yet configured.
+
+### 1. Configure email (required for user registration)
+
+Go to **Admin → Settings** and enter your SMTP details. Without a working mail configuration, residents cannot self-register because their account verification email will never be sent.
+
+See [SMTP with Gmail](#smtp-with-gmail) below for a step-by-step example.
+
+### 2. Add buildings and units (required for registration)
+
+Go to **Admin → Buildings and Units** and:
+1. Create each building by name.
+2. Expand the building and paste in its apartment/unit numbers (one per line or comma-separated).
+3. Save the units — the building can then be activated.
+
+Only **active** buildings appear on the registration page. A building cannot be activated until it has at least one unit number added.
+
+### 3. Add and activate amenities (required for bookings)
+
+Go to **Admin → Amenities** and create each bookable facility (gym, BBQ area, etc.). Set opening hours and the booking slot length, then mark it as active. Until at least one amenity is active, residents will see an empty booking page.
+
+---
+
+### Optional post-deployment steps
+
+Visit **Admin → Content** to customise:
+- Rules and Regulations text shown during registration and booking
 - Email templates for booking confirmations and account emails
-
-These are stored in the database and should be updated before residents start using the system.
 
 ---
 
@@ -265,14 +283,12 @@ Gmail requires an App Password (needs 2-Step Verification enabled):
 
 1. Enable 2-Step Verification at [myaccount.google.com/security](https://myaccount.google.com/security).
 2. Create an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) — select "Mail", copy the 16-character password.
-3. Set in `.env`:
-   ```env
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_USER=your_email@gmail.com
-   SMTP_PASS=<app_password>
-   SMTP_FROM=your_email@gmail.com
-   ```
+3. In the admin dashboard go to **Settings** and fill in:
+   - SMTP Host: `smtp.gmail.com`
+   - SMTP Port: `587`
+   - SMTP Username: `your_email@gmail.com`
+   - SMTP Password: the 16-character app password
+   - From Address: `your_email@gmail.com`
 
 ---
 

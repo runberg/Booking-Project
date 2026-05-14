@@ -29,17 +29,16 @@ export class EmailService {
       this.settingsService.get('smtp_pass'),
     ]);
 
-    const resolvedHost = host || this.configService.get('SMTP_HOST', 'smtp.gmail.com');
-    const resolvedPort = Number(port || this.configService.get('SMTP_PORT', '587'));
+    const resolvedPort = Number(port || '587');
     const secure = resolvedPort === 465;
 
     this.transporter = nodemailer.createTransport({
-      host: resolvedHost,
+      host: host || '',
       port: resolvedPort,
       secure,
       auth: {
-        user: user || this.configService.get('SMTP_USER'),
-        pass: pass || this.configService.get('SMTP_PASS'),
+        user: user || '',
+        pass: pass || '',
       },
       connectionTimeout: 5000,
       greetingTimeout: 5000,
@@ -50,19 +49,26 @@ export class EmailService {
     return this.transporter;
   }
 
+  private escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   private renderTemplateBody(
     body: string,
     variables: Record<string, string>,
   ): string {
     return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, key) => {
       const val = variables?.[key];
-      return val != null ? String(val) : '';
+      return val != null ? this.escapeHtml(String(val)) : '';
     });
   }
 
   private async getFromAddress(): Promise<string> {
-    const fromSetting = await this.settingsService.get('smtp_from');
-    return fromSetting || this.configService.get('SMTP_FROM', 'noreply@bookingapp.com');
+    return (await this.settingsService.get('smtp_from')) || '';
   }
 
   async sendVerificationEmail(
@@ -103,7 +109,7 @@ export class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Password Reset Request</h2>
-          <p>Hi ${name},</p>
+          <p>Hi ${this.escapeHtml(name)},</p>
           <p>We received a request to reset your password. Click the button below to create a new password:</p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${resetUrl}"
@@ -129,14 +135,14 @@ export class EmailService {
   async sendGenericEmail(
     email: string,
     subject: string,
-    htmlOrText: string,
+    text: string,
   ): Promise<void> {
     const mailOptions = {
       from: await this.getFromAddress(),
       to: email,
       subject,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <p>${htmlOrText}</p>
+        <p>${this.escapeHtml(text).replace(/\n/g, '<br/>')}</p>
       </div>`,
     };
     await (await this.getTransporter()).sendMail(mailOptions);

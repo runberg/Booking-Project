@@ -55,7 +55,7 @@ export class BuildingsService implements OnModuleInit {
     if (existing) {
       throw new ConflictException('Building with this name already exists');
     }
-    const building = this.buildingsRepository.create({ name, isActive: true });
+    const building = this.buildingsRepository.create({ name, isActive: false });
     return this.buildingsRepository.save(building);
   }
 
@@ -109,12 +109,15 @@ export class BuildingsService implements OnModuleInit {
         this.unitsRepo.create({ buildingId, unitNumber }),
       );
       await this.unitsRepo.save(entities);
+    } else {
+      await this.buildingsRepository.update(buildingId, { isActive: false });
     }
 
     return this.listUnitsForBuilding(buildingId);
   }
 
   async remove(id: string): Promise<void> {
-    await this.buildingsRepository.delete(id);
+    const result = await this.buildingsRepository.delete(id);
+    if (!result.affected) throw new NotFoundException('Building not found');
   }
 }

@@ -7,26 +7,21 @@ import {
   Body,
   Param,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { AmenitiesService } from '../amenities.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../users/user.entity';
 
 @Controller('admin/amenities')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.SUPER)
 export class AdminAmenitiesController {
   constructor(private amenitiesService: AmenitiesService) {}
 
-  private ensureAdminOrSuper(req: any) {
-    if (![UserRole.ADMIN, UserRole.SUPER].includes(req.user?.role)) {
-      throw new Error('Unauthorized: Admin access required');
-    }
-  }
-
   @Get()
-  async listAll(@Request() req) {
-    this.ensureAdminOrSuper(req);
+  async listAll() {
     return this.amenitiesService.listAll();
   }
 
@@ -42,9 +37,7 @@ export class AdminAmenitiesController {
       slotLength?: number;
       isActive?: boolean;
     },
-    @Request() req,
   ) {
-    this.ensureAdminOrSuper(req);
     return this.amenitiesService.create(body);
   }
 
@@ -62,15 +55,12 @@ export class AdminAmenitiesController {
       isActive?: boolean;
       bookingRestrictionId?: string | null;
     },
-    @Request() req,
   ) {
-    this.ensureAdminOrSuper(req);
     return this.amenitiesService.update(id, body);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string, @Request() req) {
-    this.ensureAdminOrSuper(req);
+  async remove(@Param('id') id: string) {
     await this.amenitiesService.remove(id);
     return { message: 'Amenity deleted' };
   }

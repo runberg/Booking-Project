@@ -88,7 +88,7 @@ export const AdminDashboard: React.FC = () => {
   const [newSuper, setNewSuper] = useState<{ name: string; email: string; password: string; building: string; apartmentNumber: string }>({ name: '', email: '', password: '', building: '', apartmentNumber: '' });
 
   const [createSecurityOpen, setCreateSecurityOpen] = useState(false);
-  const [newSecurity, setNewSecurity] = useState<{ name: string; email: string; password: string; building: string; apartmentNumber: string }>({ name: '', email: '', password: '', building: '', apartmentNumber: '' });
+  const [newSecurity, setNewSecurity] = useState<{ username: string; password: string }>({ username: '', password: '' });
 
   // Logs state
   const [logs, setLogs] = useState<Array<{ id: string; action: string; amenityName: string; date: string; startTime: string; slotLength: number; userName: string; building: string; apartmentNumber: string; userEmail: string; createdAt: string }>>([]);
@@ -104,6 +104,10 @@ export const AdminDashboard: React.FC = () => {
   const [usersSortDir, setUsersSortDir] = useState<'ASC' | 'DESC'>('DESC');
   const [usersQuery, setUsersQuery] = useState<string>('');
   const [roleInfoOpen, setRoleInfoOpen] = useState(false);
+
+  // Setup warnings
+  const [setupWarnings, setSetupWarnings] = useState<{ smtp: boolean; amenities: boolean }>({ smtp: false, amenities: false });
+  const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
 
   // Email templates state
   const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; body: string }>>([]);
@@ -147,6 +151,7 @@ export const AdminDashboard: React.FC = () => {
       await api.put('/admin/settings/smtp', payload);
       setNotification({ type: 'success', message: 'SMTP settings saved' });
       await fetchSmtpSettings();
+      checkSetup();
     } catch (e: any) {
       setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save SMTP settings' });
     } finally {
@@ -156,7 +161,21 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
+    checkSetup();
   }, []);
+
+  const checkSetup = async () => {
+    try {
+      const [smtpRes, amenitiesRes] = await Promise.all([
+        api.get('/admin/settings/smtp').catch(() => null),
+        api.get('/amenities').catch(() => null),
+      ]);
+      const smtp = smtpRes?.data;
+      const smtpMissing = !smtp?.smtp_host || !smtp?.smtp_pass_set;
+      const amenitiesMissing = !amenitiesRes?.data?.length;
+      setSetupWarnings({ smtp: smtpMissing, amenities: amenitiesMissing });
+    } catch {}
+  };
 
   useEffect(() => {
     if (activeTab === 'buildings') fetchBuildings();
@@ -407,6 +426,45 @@ export const AdminDashboard: React.FC = () => {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card>
+          {/* Setup warnings */}
+          {[
+            {
+              key: 'smtp',
+              show: setupWarnings.smtp,
+              message: 'Email is not configured. Users will not receive verification emails and cannot self-register until SMTP is set up.',
+              action: 'Go to Settings',
+              tab: 'settings' as typeof activeTab,
+            },
+            {
+              key: 'amenities',
+              show: setupWarnings.amenities,
+              message: 'No active amenities found. Users will not be able to make any bookings until at least one amenity is added and activated.',
+              action: 'Go to Amenities',
+              tab: 'amenities' as typeof activeTab,
+            },
+          ]
+            .filter((w) => w.show && !dismissedWarnings.has(w.key))
+            .map((w) => (
+              <div key={w.key} className="flex items-start justify-between gap-3 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4 text-sm text-amber-900">
+                <span>{w.message}</span>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <button
+                    className="font-medium underline hover:no-underline whitespace-nowrap"
+                    onClick={() => { setActiveTab(w.tab); setMobileMenuOpen(false); }}
+                  >
+                    {w.action}
+                  </button>
+                  <button
+                    className="text-amber-600 hover:text-amber-900"
+                    onClick={() => setDismissedWarnings((s) => new Set([...s, w.key]))}
+                    aria-label="Dismiss"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
           {/* Tabs */}
           <div className="mb-6 border-b border-gray-200">
             {/* Mobile burger menu */}
@@ -576,11 +634,17 @@ export const AdminDashboard: React.FC = () => {
                           <tr key={user.id}>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                               <div className="text-xs sm:text-sm font-medium text-gray-900">{user.name}</div>
-                              <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>
+                              {user.role !== 'security' && <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>}
                             </td>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden sm:table-cell">
-                              <div className="text-xs sm:text-sm text-gray-900">{user.building}</div>
-                              <div className="text-xs sm:text-sm text-gray-500">Apt {user.apartmentNumber}</div>
+                              {user.role === 'security' ? (
+                                <div className="text-xs sm:text-sm text-gray-400">—</div>
+                              ) : (
+                                <>
+                                  <div className="text-xs sm:text-sm text-gray-900">{user.building}</div>
+                                  <div className="text-xs sm:text-sm text-gray-500">Apt {user.apartmentNumber}</div>
+                                </>
+                              )}
                             </td>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
@@ -1140,13 +1204,11 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex min-h-screen items-center justify-center p-4">
             <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateSecurityOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Security User</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Create Security User</h3>
+              <p className="text-sm text-gray-500 mb-4">Security users log in with their username and password. They have read-only access to the security dashboard.</p>
               <div className="space-y-3">
-                <input className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm" placeholder="Full name" value={newSecurity.name} onChange={(e) => setNewSecurity({ ...newSecurity, name: e.target.value })} />
-                <input className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm" placeholder="Email" value={newSecurity.email} onChange={(e) => setNewSecurity({ ...newSecurity, email: e.target.value })} />
+                <input className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm" placeholder="Username" value={newSecurity.username} onChange={(e) => setNewSecurity({ ...newSecurity, username: e.target.value })} />
                 <input className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm" placeholder="Password" type="password" value={newSecurity.password} onChange={(e) => setNewSecurity({ ...newSecurity, password: e.target.value })} />
-                <input className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm" placeholder="Building" value={newSecurity.building} onChange={(e) => setNewSecurity({ ...newSecurity, building: e.target.value })} />
-                <input className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm" placeholder="Apartment number" value={newSecurity.apartmentNumber} onChange={(e) => setNewSecurity({ ...newSecurity, apartmentNumber: e.target.value })} />
               </div>
               <div className="mt-6 flex justify-end space-x-3">
                 <Button variant="secondary" onClick={() => setCreateSecurityOpen(false)}>Cancel</Button>
@@ -1155,7 +1217,7 @@ export const AdminDashboard: React.FC = () => {
                     await api.post('/admin/users', { ...newSecurity, isSecurity: true });
                     setNotification({ type: 'success', message: 'Security user created' });
                     setCreateSecurityOpen(false);
-                    setNewSecurity({ name: '', email: '', password: '', building: '', apartmentNumber: '' });
+                    setNewSecurity({ username: '', password: '' });
                     fetchUsers();
                   } catch (e: any) {
                     setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to create security user' });

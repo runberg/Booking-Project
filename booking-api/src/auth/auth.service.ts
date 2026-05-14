@@ -58,7 +58,10 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    const user = await this.usersService.findByEmail(loginDto.email);
+    const lookupEmail = loginDto.email.includes('@')
+      ? loginDto.email
+      : `${loginDto.email}@security.local`;
+    const user = await this.usersService.findByEmail(lookupEmail);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -196,11 +199,11 @@ export class AuthService {
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get('JWT_SECRET'),
+        secret: this.configService.getOrThrow<string>('JWT_SECRET'),
         expiresIn: '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get('JWT_REFRESH_SECRET'),
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: '7d',
       }),
     ]);

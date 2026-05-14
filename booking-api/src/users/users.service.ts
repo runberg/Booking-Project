@@ -1,6 +1,7 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, MoreThan } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { User, UserRole } from './user.entity';
 import { RegisterDto } from '../auth/dto/auth.dto';
 
@@ -12,6 +13,10 @@ export class UsersService {
   ) {}
 
   async create(registerDto: RegisterDto): Promise<User> {
+    if (registerDto.email.toLowerCase().endsWith('@security.local')) {
+      throw new BadRequestException('Invalid email address');
+    }
+
     const existingUser = await this.findByEmail(registerDto.email);
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
@@ -122,7 +127,6 @@ export class UsersService {
   }
 
   private async hashPassword(password: string): Promise<string> {
-    const bcrypt = await import('bcrypt');
     return bcrypt.hash(password, 12);
   }
 }

@@ -48,7 +48,7 @@ export class AdminController {
 
   @Delete('users/:id')
   async deleteUser(@Param('id') id: string, @Request() req) {
-    if (req.user.sub === id) {
+    if (req.user.id === id) {
       throw new ForbiddenException('Cannot delete your own account');
     }
     await this.usersService.deleteUser(id);
@@ -99,22 +99,45 @@ export class AdminController {
   async createUser(
     @Body()
     body: {
-      email: string;
-      password: string;
-      name: string;
-      building: string;
-      apartmentNumber: string;
+      // regular / super user fields
+      email?: string;
+      name?: string;
+      building?: string;
+      apartmentNumber?: string;
       isSuper?: boolean;
+      // security user fields
+      username?: string;
       isSecurity?: boolean;
+      // shared
+      password: string;
     },
   ) {
-    const user = await this.usersService.create({
-      email: body.email,
-      password: body.password,
-      name: body.name,
-      building: body.building,
-      apartmentNumber: body.apartmentNumber,
-    } as any);
+    let email: string;
+    let name: string;
+    let building: string;
+    let apartmentNumber: string;
+
+    if (!body.password || body.password.length < 8 || body.password.length > 128) {
+      throw new BadRequestException('Password must be between 8 and 128 characters');
+    }
+
+    if (body.isSecurity) {
+      if (!body.username) throw new BadRequestException('username is required for security users');
+      email = `${body.username}@security.local`;
+      name = body.username;
+      building = 'Security';
+      apartmentNumber = body.username;
+    } else {
+      if (!body.email || !body.name || !body.building || !body.apartmentNumber) {
+        throw new BadRequestException('email, name, building and apartmentNumber are required');
+      }
+      email = body.email;
+      name = body.name;
+      building = body.building;
+      apartmentNumber = body.apartmentNumber;
+    }
+
+    const user = await this.usersService.create({ email, password: body.password, name, building, apartmentNumber } as any);
     await this.usersService.updateEmailVerification(user.id, true);
     if (body.isSuper) {
       await this.usersService.updateUserRole(user.id, UserRole.SUPER);

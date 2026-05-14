@@ -158,11 +158,10 @@ export class BookingsService implements OnModuleInit {
 
     const items = await this.bookingsRepo
       .createQueryBuilder('b')
-      .where('b.date > :today', { today: todayKey })
-      .orWhere('(b.date = :today AND b.startTime >= :startTime)', {
-        today: todayKey,
-        startTime: nowKey,
-      })
+      .where(
+        '(b.date > :today OR (b.date = :today AND b.startTime >= :startTime))',
+        { today: todayKey, startTime: nowKey },
+      )
       .orderBy('b.date', 'ASC')
       .addOrderBy('b.startTime', 'ASC')
       .limit(limit)
@@ -208,6 +207,9 @@ export class BookingsService implements OnModuleInit {
       .addOrderBy('b.startTime', 'ASC')
       .getMany();
 
+    // Over-fetches intentionally: the DB query gets all bookings that have started
+    // today; the precise "still running" check (startMinutes + slotLength > nowMinutes)
+    // is applied in the map below to avoid a complex DB expression.
     const currentBookings = await this.bookingsRepo
       .createQueryBuilder('b')
       .where('b.date = :today', { today: todayKey })
