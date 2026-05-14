@@ -1,202 +1,295 @@
-# Booking Project
+# Booking System
 
-Modern booking system for residential amenities (e.g., gym, BBQ, common rooms). Includes:
-- Web app for users to browse amenities, see availability, and make bookings
-- Admin dashboard for user management, buildings, amenities, booking restrictions, logs, and email templates
-- JWT auth with refresh, SQLite (dev), NestJS API, React + Vite frontend
+A self-hosted amenity booking platform for residential buildings. Residents book facilities (gym, badminton, BBQ area, etc.) through a web app. Administrators manage users, buildings, amenities, booking restrictions, and review logs.
 
-## Deployment (Docker Compose + Traefik)
+## Stack
 
-This repository ships generic deployment files using environment placeholders. Do NOT hardcode secrets in git. On the server, provide a real `.env` file.
+| Layer | Technology |
+|---|---|
+| API | NestJS 11 (Fastify adapter) |
+| Frontend | React 19 + Vite, served by nginx |
+| Database | PostgreSQL 16 |
+| Edge proxy | Traefik v3 (shared with other services on the host) |
 
-### Files
-- `docker-compose.yml`: uses `${...}` placeholders
-- `booking-api/Dockerfile`: builds and runs NestJS API
-- `booking-frontend/Dockerfile`: builds Vite app, serves with nginx
-- `booking-frontend/nginx.conf`: SPA fallback
-- `env.example`: sample env file to copy and fill on the server
+Images are built by GitHub Actions and published to GHCR:
+- `ghcr.io/runberg/booking-project/api:latest`
+- `ghcr.io/runberg/booking-project/frontend:latest`
 
-### Required environment (server-side)
-**Prerequisites:** Docker and Docker Compose must be installed on the server.
+---
 
-Copy `env.example` to `.env.production` (or `.env`) and fill in:
+## Deployment
+
+### Step 1 — Traefik shared proxy (one-time per server)
+
+All Docker projects on the server share a single Traefik instance that owns ports 80/443. If Traefik is already running, skip to Step 2.
+
+**Create the directory and required files:**
 
 ```bash
-# Traefik mode (leave as-is for the built-in proxy)
-USE_INTERNAL_TRAEFIK=true
-TRAEFIK_NETWORK_NAME=booking-project-proxy
-TRAEFIK_NETWORK_IS_EXTERNAL=false
-TRAEFIK_PING_URL=http://proxy:8080/ping
-# Optional tweaks for the external proxy health check
-#TRAEFIK_PING_RETRIES=5
-#TRAEFIK_PING_DELAY_SECONDS=2
-#TRAEFIK_PING_TIMEOUT_MS=3000
-
-# Domain and TLS
-APP_HOST=app.example.com  # Single domain for both frontend and API (path-based routing)
-LE_EMAIL=admin@example.com
-
-# Timezone (e.g., Asia/Dubai, Europe/Copenhagen, America/New_York)
-# See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones for valid values
-TZ=UTC
-
-# Admin User (automatically created on first startup if not exists)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=your_secure_admin_password_here
-
-# JWT Configuration (generate secure random strings)
-# Generate with: openssl rand -base64 32 (run twice for two different secrets)
-JWT_SECRET=your_super_secret_jwt_key_here_make_it_long_and_random
-JWT_REFRESH_SECRET=your_super_secret_refresh_jwt_key_here_make_it_long_and_random
-
-# SMTP (Gmail example)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
-SMTP_FROM=your_email@gmail.com
-
-# Optional build-time absolute URL; otherwise app calls relative /api
-# VITE_API_BASE_URL=https://app.example.com/api
+mkdir ~/traefik && cd ~/traefik
+mkdir letsencrypt dynamic
+touch letsencrypt/acme.json && chmod 600 letsencrypt/acme.json
 ```
 
-**Generating JWT Secrets:**
-```bash
-# Generate JWT_SECRET
-openssl rand -base64 32
+`chmod 600` on `acme.json` is mandatory — Traefik refuses to start if the file has loose permissions.
 
-# Generate JWT_REFRESH_SECRET (run again for a different value)
-openssl rand -base64 32
+**Create `~/traefik/docker-compose.yml`:**
+
+```yaml
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.traefik.address=:8080
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.email=you@yourdomain.com
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --api.dashboard=true
+      - --ping=true
+      - --ping.entrypoint=traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      # Uncomment only if you need host-level dashboard access (keep firewalled):
+      # - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+      - ./dynamic:/etc/traefik/dynamic
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dashboard.entrypoints=traefik
+      - traefik.http.routers.dashboard.service=api@internal
+      - traefik.http.routers.dashboard.middlewares=dashboard-auth
+      # Generate the password hash: htpasswd -nB admin  (escape $ as $$ in yaml)
+      - traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$2y$$05$$...
+      # Global HTTP → HTTPS redirect for all domains
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)
+      - traefik.http.routers.http-catchall.entrypoints=web
+      - traefik.http.routers.http-catchall.middlewares=redirect-to-https
+    networks:
+      - traefik-proxy
+    restart: unless-stopped
+
+networks:
+  traefik-proxy:
+    name: traefik-proxy
 ```
 
-**Password Security:** All passwords (including admin passwords) are automatically hashed using bcrypt before storage in the database. The admin password set in `ADMIN_PASSWORD` is hashed when the admin user is created. User passwords are also hashed during registration and password resets.
+**Start Traefik:**
 
-### Selecting Traefik mode
-
-- `USE_INTERNAL_TRAEFIK=true` (default) keeps the stack self-contained. The `.env` also sets `COMPOSE_PROFILES=internal-traefik`, so a plain `docker compose up -d` will start Traefik alongside the API and frontend.
-- To reuse an existing Traefik deployment:
-  1. Set `USE_INTERNAL_TRAEFIK=false`.
-  2. Clear the `COMPOSE_PROFILES` value (leave it blank or remove the line) so Docker Compose skips the bundled proxy.
-  3. Point `TRAEFIK_NETWORK_NAME` at the shared Docker network (for example, `traefik-proxy`) and set `TRAEFIK_NETWORK_IS_EXTERNAL=true`.
-  4. Update `TRAEFIK_PING_URL` if the shared Traefik exposes `/ping` on a different host or port.
-  5. The compose file automatically adds `traefik.docker.network=${TRAEFIK_NETWORK_NAME}` to both services so Traefik resolves the correct container IP; double-check that the name matches the network your external proxy uses.
-
-When `USE_INTERNAL_TRAEFIK=false`, both the API and the frontend perform a startup probe against `TRAEFIK_PING_URL`. If the proxy is unreachable, the containers exit with a helpful error message so you can fix the network wiring before the stack comes online.
-
-### Start services
 ```bash
-docker compose --env-file .env.production build
-docker compose --env-file .env.production up -d
-```
-
-Or if using `.env` (recommended):
-```bash
-docker compose build
 docker compose up -d
 ```
 
-Traefik terminates TLS and routes both frontend and backend on the same domain using path-based routing:
-- Web: `https://APP_HOST` (e.g., `https://app.example.com`)
-- API: `https://APP_HOST/api` (Traefik strips the `/api` prefix before forwarding to the API container)
+Traefik creates the `traefik-proxy` Docker network automatically. Every project on the server joins this network as an **external** network — they never manage it themselves.
 
-**DNS Setup:** Only one A record is needed: `APP_HOST` → your server IP.
+---
 
-### Updating/Restarting Services
+### Step 2 — Deploy the Booking System
 
-**After pulling code changes:**
 ```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild and restart (Traefik will automatically wait for API to be healthy)
-docker compose build --no-cache api web
-docker compose up -d
-
-# Or restart just the API if only backend changed:
-docker compose build --no-cache api
-docker compose restart api proxy  # Restart proxy to rediscover API
+git clone https://github.com/runberg/Booking-Project.git
+cd Booking-Project
+cp env.example .env
 ```
 
-**⚠️ Important:** If you rebuild the API container, always restart both `api` and `proxy` together to ensure Traefik rediscoveries the API on the correct network. The `depends_on` configuration ensures Traefik waits for the API to be healthy, but restarting both prevents network discovery issues.
+Edit `.env` — required fields:
 
-**Check service status:**
+```env
+DOMAIN=booking.yourdomain.com
+
+POSTGRES_PASSWORD=a_strong_random_password
+
+JWT_SECRET=<openssl rand -base64 32>
+JWT_REFRESH_SECRET=<openssl rand -base64 32>
+
+ADMIN_EMAIL=admin@yourdomain.com
+ADMIN_PASSWORD=change_after_first_login
+
+FRONTEND_URL=https://booking.yourdomain.com
+CORS_ORIGIN=https://booking.yourdomain.com
+```
+
 ```bash
-# View all containers
+docker compose up -d
+```
+
+Traefik detects the container via Docker labels, issues a Let's Encrypt certificate for `DOMAIN`, and begins routing. The app is live at `https://booking.yourdomain.com` within a minute or two.
+
+**On first start**, the API creates an admin account using `ADMIN_EMAIL` / `ADMIN_PASSWORD` if no admin exists yet.
+
+---
+
+### Updating
+
+GitHub Actions builds a new image on every push to `main`. Pull and redeploy on the server:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+---
+
+### Useful commands
+
+```bash
+# Status
 docker compose ps
 
-# Check API logs
+# Live logs
 docker compose logs -f api
+docker compose logs -f web
 
-# Check Traefik logs
-docker compose logs -f proxy
-
-# Test API connectivity
-docker compose exec proxy wget -q -O- --timeout=5 http://api:3000/health
+# Database backup
+docker compose exec postgres pg_dump -U booking booking > backup-$(date +%Y%m%d).sql
 ```
 
-### External Traefik reference stack
+---
 
-Need a reusable Traefik instance that fronts multiple projects? See `examples/traefik/docker-compose.external-traefik.example.yml` for a sample stack that:
-- Creates a shared network (`traefik-proxy`).
-- Enables automatic HTTPS with ACME (Let’s Encrypt TLS challenge).
-- Enables the dashboard internally on `http://traefik:8080` (secured with Basic Auth). Expose it to the host only if you uncomment the provided port mapping.
+## Hooking other projects into the same Traefik instance
 
-Start it once, and point this project at the shared network by setting `USE_INTERNAL_TRAEFIK=false`, updating `TRAEFIK_NETWORK_NAME`, and flipping `TRAEFIK_NETWORK_IS_EXTERNAL=true`. If you plan to view the dashboard, provide values for `TRAEFIK_DASHBOARD_HOST` and `DASHBOARD_USER_HASH`, then curl it from another container (or via SSH tunnel) with the matching Host header. Only uncomment the `8080:8080` mapping when you explicitly want host-level access, and keep it firewalled.
+Any project on the server follows the same pattern. The three requirements are:
 
-### Notes
-- The frontend uses relative `/api` path by default (no separate domain needed).
-- CORS in API is controlled by `CORS_ORIGIN` (set automatically to `https://APP_HOST` by compose).
-- **Database:** SQLite database is persisted in the `./data` directory on the host (bind mount) at `./data/booking.db`. This makes it easy to backup and access directly.
-- **Auto-migrations:** Database migrations run automatically on container startup in production. Fresh databases will be initialized automatically using synchronize.
+1. Declare `traefik-proxy` as an **external** network.
+2. Put the publicly-accessible container on both `traefik-proxy` (so Traefik can reach it) and `internal` (so it can reach its own database/services).
+3. Add the four Traefik labels.
 
-### Post-deployment: Update Content
-After deploying, log in as an admin and navigate to the Admin Dashboard → Content tab. You must update:
-- **Rules and Regulations**: Customize the legal texts shown during registration and booking confirmation
-- **Mail**: Update email templates for user registration and booking confirmation emails
+**Template:**
 
-These texts are stored in the database and should be customized for your organization before users start registering.
+```yaml
+services:
 
-### Database Migrations
+  traefik-ready:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        for i in $(seq 1 ${TRAEFIK_PING_RETRIES:-10}); do
+          curl -fsS ${TRAEFIK_PING_URL:-http://traefik:8080/ping} && exit 0
+          echo 'waiting for Traefik...'; sleep ${TRAEFIK_PING_DELAY_SECONDS:-3};
+        done; exit 1
+      "
+    restart: "no"
+    networks:
+      - traefik-proxy
 
-**Automatic Migrations:** In production, migrations run automatically on container startup. When you deploy code changes that modify the database schema, the migrations will be applied automatically when the container restarts.
+  app:
+    image: myapp:latest
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-proxy
+      - traefik.http.routers.myapp.rule=Host(`myapp.yourdomain.com`)
+      - traefik.http.routers.myapp.entrypoints=websecure
+      - traefik.http.routers.myapp.tls.certresolver=le
+      - traefik.http.services.myapp.loadbalancer.server.port=80
+    depends_on:
+      traefik-ready:
+        condition: service_completed_successfully
+    networks:
+      - traefik-proxy   # Traefik routes here
+      - internal        # App reaches its database here
 
-**Manual Migration Commands** (if needed):
+  db:
+    image: postgres:16-alpine
+    networks:
+      - internal        # Never on traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true      # Owned by the Traefik stack, shared across all projects
+  internal:
+    driver: bridge      # Private to this project
+```
+
+**Label reference:**
+
+| Label | Purpose |
+|---|---|
+| `traefik.enable=true` | Opt in (required because `exposedByDefault=false`) |
+| `traefik.docker.network=traefik-proxy` | Which network Traefik uses to reach the container (needed when container is on multiple networks) |
+| `traefik.http.routers.<name>.rule=Host(...)` | Domain routing rule |
+| `traefik.http.routers.<name>.entrypoints=websecure` | HTTPS only (HTTP→HTTPS redirect is handled globally by Traefik) |
+| `traefik.http.routers.<name>.tls.certresolver=le` | Automatic Let's Encrypt certificate |
+| `traefik.http.services.<name>.loadbalancer.server.port=PORT` | The internal port the container listens on |
+
+The `traefik-ready` service verifies Traefik is reachable before the app container starts. `depends_on: condition: service_completed_successfully` blocks the app until the check passes.
+
+---
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DOMAIN` | Yes | — | Public hostname, e.g. `booking.yourdomain.com` |
+| `POSTGRES_USER` | No | `booking` | Database username |
+| `POSTGRES_PASSWORD` | Yes | — | Database password |
+| `POSTGRES_DB` | No | `booking` | Database name |
+| `JWT_SECRET` | Yes | — | Access token signing secret (`openssl rand -base64 32`) |
+| `JWT_REFRESH_SECRET` | Yes | — | Refresh token signing secret (must differ from `JWT_SECRET`) |
+| `ADMIN_EMAIL` | Yes | — | Initial admin account email |
+| `ADMIN_PASSWORD` | Yes | — | Initial admin account password |
+| `FRONTEND_URL` | Yes | — | Full app URL, e.g. `https://booking.yourdomain.com` (used in emails) |
+| `CORS_ORIGIN` | Yes | — | Allowed CORS origin — should match `FRONTEND_URL` |
+| `TZ` | No | `UTC` | Timezone for the API container |
+| `SMTP_HOST` | No | — | SMTP hostname. Leave blank to disable email. |
+| `SMTP_PORT` | No | `587` | SMTP port |
+| `SMTP_USER` | No | — | SMTP username |
+| `SMTP_PASS` | No | — | SMTP password |
+| `SMTP_FROM` | No | — | From address for outgoing emails |
+
+---
+
+## Post-deployment
+
+Log in as the admin user and visit **Admin → Content** to customise:
+- Rules and Regulations shown during registration and booking
+- Email templates for booking confirmations and account emails
+
+These are stored in the database and should be updated before residents start using the system.
+
+---
+
+## SMTP with Gmail
+
+Gmail requires an App Password (needs 2-Step Verification enabled):
+
+1. Enable 2-Step Verification at [myaccount.google.com/security](https://myaccount.google.com/security).
+2. Create an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) — select "Mail", copy the 16-character password.
+3. Set in `.env`:
+   ```env
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=your_email@gmail.com
+   SMTP_PASS=<app_password>
+   SMTP_FROM=your_email@gmail.com
+   ```
+
+---
+
+## Local development
+
+**API** (requires a local PostgreSQL instance):
+
 ```bash
-# Run pending migrations manually
-docker compose exec api npm run migration:run:prod
-
-# Check migration status
-docker compose exec api npm run migration:show
+cd booking-api
+cp .env.example .env   # set DATABASE_URL to your local Postgres
+npm install
+npm run start:dev      # http://localhost:3000
 ```
 
-**⚠️ Important**: Always backup your database before deploying schema changes:
+**Frontend:**
+
 ```bash
-# Backup database (located at ./data/booking.db)
-cp ./data/booking.db ./data/booking.db.backup-$(date +%Y%m%d-%H%M%S)
+cd booking-frontend
+npm install
+npm run dev            # http://localhost:5173, proxies /api → localhost:3000
 ```
-
-**Fresh Installations:** For fresh deployments, the database will be automatically initialized using synchronize (tables created from entities). Once the database exists, synchronize is disabled and migrations take over.
-
-See `booking-api/MIGRATIONS.md` for detailed migration documentation.
-
-## Q&A
-
-### How do I set up Gmail for SMTP?
-
-Use an App Password (Gmail requires 2‑Step Verification):
-
-1) Enable 2‑Step Verification: https://myaccount.google.com/security → "2‑Step Verification".
-
-2) Create App Password: on the same page, open "App passwords" (or visit https://myaccount.google.com/apppasswords), select "Mail", choose a device (or "Other"), click "Generate", copy the 16‑char password.
-
-3) Configure env:
-   - `SMTP_HOST=smtp.gmail.com`
-   - `SMTP_PORT=465` (SSL) or `587` (STARTTLS)
-   - `SMTP_USER=your_email@gmail.com`
-   - `SMTP_PASS=<APP_PASSWORD>`
-   - `SMTP_FROM=your_email@gmail.com`
-   - `FRONTEND_URL=https://APP_HOST`
-
-4) Test: trigger registration or a booking to verify delivery.
-
-Tips: If "App passwords" is missing, enable 2SV first or check Workspace admin policies. Ensure outbound 465/587 is allowed. For higher volume, consider SES/SendGrid/Mailgun.
