@@ -38,6 +38,11 @@ export const BookingPage: React.FC = () => {
   const [infoMessage, setInfoMessage] = useState<string>('');
   const [upcoming, setUpcoming] = useState<Array<{ id: string; amenityName: string; date: string; startTime: string; slotLength: number; userName: string; building: string; apartmentNumber: string }>>([]);
   const [bookingLegalText, setBookingLegalText] = useState<string>('Legal note - Booking confirmation');
+  const [showPast, setShowPast] = useState(false);
+  const [pastBookings, setPastBookings] = useState<Array<{ id: string; amenityId: string; date: string; startTime: string; slotLength: number }>>([]);
+  const [pastTotal, setPastTotal] = useState(0);
+  const [pastPage, setPastPage] = useState(1);
+  const [isLoadingPast, setIsLoadingPast] = useState(false);
   const periodLimitReached = useMemo(() => {
     if (!selected) return false;
     if (selected.maxPerPeriod == null || selected.maxPerPeriod <= 0) return false;
@@ -111,6 +116,19 @@ export const BookingPage: React.FC = () => {
       const { data } = await api.get('/bookings/upcoming');
       setUpcoming(data);
     } catch {}
+  };
+
+  const loadPastBookings = async (page = 1) => {
+    setIsLoadingPast(true);
+    try {
+      const { data } = await api.get('/bookings/me/past', { params: { page, pageSize: 10 } });
+      setPastBookings(data.items);
+      setPastTotal(data.total);
+      setPastPage(page);
+    } catch {}
+    finally {
+      setIsLoadingPast(false);
+    }
   };
 
   useEffect(() => {
@@ -413,32 +431,94 @@ export const BookingPage: React.FC = () => {
         )}
         </div>
 
-        {/* My Bookings Section */}
+        {/* My Upcoming Bookings Section */}
         <div className="mt-8">
-        <Card>
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">My bookings</h2>
-          {myBookings.length === 0 ? (
-            <p className="text-sm text-gray-600">You have no bookings yet.</p>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {myBookings.map((b) => (
-                <li key={b.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
-                    <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
+          <Card>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">My upcoming bookings</h2>
+            {myBookings.length === 0 ? (
+              <p className="text-sm text-gray-600">You have no upcoming bookings.</p>
+            ) : (
+              <ul className="divide-y divide-gray-200">
+                {myBookings.map((b) => (
+                  <li key={b.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
+                      <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
+                    </div>
+                    <button
+                      onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}
+                      className="flex-shrink-0 p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                      aria-label="Delete booking"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        {/* Past Bookings Section */}
+        <div className="mt-4">
+          <button
+            className="text-sm font-medium text-primary-600 hover:text-primary-800 flex items-center gap-1 py-1"
+            onClick={() => {
+              if (!showPast) loadPastBookings(1);
+              setShowPast((s) => !s);
+            }}
+          >
+            <span>{showPast ? '▲' : '▼'}</span>
+            <span>{showPast ? 'Hide past bookings' : 'Show past bookings'}</span>
+          </button>
+          {showPast && (
+            <div className="mt-3">
+              <Card>
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Past bookings</h2>
+                {isLoadingPast ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
                   </div>
-                  <button
-                    onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}
-                    className="flex-shrink-0 p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-                    aria-label="Delete booking"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+                ) : pastBookings.length === 0 ? (
+                  <p className="text-sm text-gray-600">No past bookings.</p>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-gray-200">
+                      {pastBookings.map((b) => (
+                        <li key={b.id} className="py-3">
+                          <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
+                          <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
+                      <div className="text-sm text-gray-600">
+                        Page {pastPage} of {Math.max(1, Math.ceil(pastTotal / 10))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          className="text-xs px-3 py-2"
+                          disabled={pastPage <= 1}
+                          onClick={() => loadPastBookings(pastPage - 1)}
+                        >
+                          Prev
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          className="text-xs px-3 py-2"
+                          disabled={pastPage >= Math.ceil(pastTotal / 10)}
+                          onClick={() => loadPastBookings(pastPage + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Card>
+            </div>
           )}
-        </Card>
         </div>
 
         {selected && (

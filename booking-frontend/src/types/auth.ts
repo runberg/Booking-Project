@@ -5,7 +5,7 @@ export interface User {
   building: string;
   apartmentNumber: string;
   isEmailVerified: boolean;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'super' | 'security';
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

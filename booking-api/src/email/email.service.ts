@@ -2,31 +2,52 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { EmailTemplatesService } from '../email-templates/email-templates.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
+  private transporterBuiltAt = 0;
+  private readonly TRANSPORTER_TTL = 60_000;
 
   constructor(
     private configService: ConfigService,
     private templates: EmailTemplatesService,
-  ) {
-    const host = this.configService.get('SMTP_HOST', 'smtp.gmail.com');
-    const port = Number(this.configService.get('SMTP_PORT', 587));
-    const secure = port === 465; // use TLS for 465
+    private settingsService: SettingsService,
+  ) {}
+
+  private async getTransporter(): Promise<nodemailer.Transporter> {
+    const now = Date.now();
+    if (this.transporter && now - this.transporterBuiltAt < this.TRANSPORTER_TTL) {
+      return this.transporter;
+    }
+
+    const [host, port, user, pass] = await Promise.all([
+      this.settingsService.get('smtp_host'),
+      this.settingsService.get('smtp_port'),
+      this.settingsService.get('smtp_user'),
+      this.settingsService.get('smtp_pass'),
+    ]);
+
+    const resolvedHost = host || this.configService.get('SMTP_HOST', 'smtp.gmail.com');
+    const resolvedPort = Number(port || this.configService.get('SMTP_PORT', '587'));
+    const secure = resolvedPort === 465;
+
     this.transporter = nodemailer.createTransport({
-      host,
-      port,
+      host: resolvedHost,
+      port: resolvedPort,
       secure,
       auth: {
-        user: this.configService.get('SMTP_USER'),
-        pass: this.configService.get('SMTP_PASS'),
+        user: user || this.configService.get('SMTP_USER'),
+        pass: pass || this.configService.get('SMTP_PASS'),
       },
-      // Timeouts to avoid long hangs in production
       connectionTimeout: 5000,
       greetingTimeout: 5000,
       socketTimeout: 7000,
     } as any);
+
+    this.transporterBuiltAt = now;
+    return this.transporter;
   }
 
   private renderTemplateBody(
@@ -37,6 +58,11 @@ export class EmailService {
       const val = variables?.[key];
       return val != null ? String(val) : '';
     });
+  }
+
+  private async getFromAddress(): Promise<string> {
+    const fromSetting = await this.settingsService.get('smtp_from');
+    return fromSetting || this.configService.get('SMTP_FROM', 'noreply@bookingapp.com');
   }
 
   async sendVerificationEmail(
@@ -55,12 +81,12 @@ export class EmailService {
       },
     );
     const mailOptions = {
-      from: this.configService.get('SMTP_FROM', 'noreply@bookingapp.com'),
+      from: await this.getFromAddress(),
       to: email,
       subject: 'Verify Your Email Address',
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><p>${body.replace(/\n/g, '<br/>')}</p></div>`,
     };
-    await this.transporter.sendMail(mailOptions);
+    await (await this.getTransporter()).sendMail(mailOptions);
   }
 
   async sendPasswordResetEmail(
@@ -71,7 +97,7 @@ export class EmailService {
     const resetUrl = `${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token=${token}`;
 
     const mailOptions = {
-      from: this.configService.get('SMTP_FROM', 'noreply@bookingapp.com'),
+      from: await this.getFromAddress(),
       to: email,
       subject: 'Reset Your Password',
       html: `
@@ -80,7 +106,7 @@ export class EmailService {
           <p>Hi ${name},</p>
           <p>We received a request to reset your password. Click the button below to create a new password:</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetUrl}" 
+            <a href="${resetUrl}"
                style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
               Reset Password
             </a>
@@ -97,7 +123,7 @@ export class EmailService {
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    await (await this.getTransporter()).sendMail(mailOptions);
   }
 
   async sendGenericEmail(
@@ -106,14 +132,14 @@ export class EmailService {
     htmlOrText: string,
   ): Promise<void> {
     const mailOptions = {
-      from: this.configService.get('SMTP_FROM', 'noreply@bookingapp.com'),
+      from: await this.getFromAddress(),
       to: email,
       subject,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <p>${htmlOrText}</p>
       </div>`,
     };
-    await this.transporter.sendMail(mailOptions);
+    await (await this.getTransporter()).sendMail(mailOptions);
   }
 
   async sendTemplateEmail(

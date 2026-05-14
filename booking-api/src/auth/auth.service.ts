@@ -13,6 +13,7 @@ import {
   VerifyEmailDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  ContactAdminDto,
 } from './dto/auth.dto';
 import { AuthResponseDto } from './dto/response.dto';
 import { User } from '../users/user.entity';
@@ -156,6 +157,23 @@ export class AuthService {
       message:
         'Password reset successfully. You can now log in with your new password.',
     };
+  }
+
+  async contactAdmin(dto: ContactAdminDto): Promise<{ message: string }> {
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
+    const body =
+      `A registration enquiry has been submitted via the website.\n\n` +
+      `Name: ${dto.name}\n` +
+      `Email: ${dto.email}\n` +
+      `Building: ${dto.building}\n` +
+      `Unit: ${dto.unit}\n\n` +
+      `Message:\n${dto.message}`;
+    await this.emailService.sendGenericEmail(
+      adminEmail,
+      'Registration enquiry from website',
+      body,
+    );
+    return { message: 'Your message has been sent to the administrator.' };
   }
 
   async refreshToken(user: User): Promise<AuthResponseDto> {

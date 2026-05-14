@@ -64,11 +64,48 @@ export class BookingsService implements OnModuleInit {
     return saved;
   }
 
-  async listForUser(userId: string) {
-    return this.bookingsRepo.find({
-      where: { userId },
-      order: { date: 'ASC', startTime: 'ASC' },
-    });
+  async listUpcomingForUser(userId: string) {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowKey = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    return this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.userId = :userId', { userId })
+      .andWhere(
+        '(b.date > :today OR (b.date = :today AND b.startTime >= :startTime))',
+        { today: todayKey, startTime: nowKey },
+      )
+      .orderBy('b.date', 'ASC')
+      .addOrderBy('b.startTime', 'ASC')
+      .getMany();
+  }
+
+  async listPastForUser(
+    userId: string,
+    page: number,
+    pageSize: number,
+  ): Promise<{ items: Booking[]; total: number; page: number; pageSize: number }> {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowKey = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const qb = this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.userId = :userId', { userId })
+      .andWhere(
+        '(b.date < :today OR (b.date = :today AND b.startTime < :startTime))',
+        { today: todayKey, startTime: nowKey },
+      )
+      .orderBy('b.date', 'DESC')
+      .addOrderBy('b.startTime', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const [items, total] = await qb.getManyAndCount();
+    return { items, total, page, pageSize };
   }
 
   async listForAmenityOnDate(amenityId: string, date: string) {
@@ -150,6 +187,74 @@ export class BookingsService implements OnModuleInit {
         userName: user?.name ?? 'User',
         building: user?.building ?? '',
         apartmentNumber: user?.apartmentNumber ?? '',
+      };
+    });
+  }
+
+  async getSecurityDashboard() {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowKey = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const upcomingBookings = await this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.date > :today', { today: todayKey })
+      .orWhere('(b.date = :today AND b.startTime >= :startTime)', {
+        today: todayKey,
+        startTime: nowKey,
+      })
+      .orderBy('b.date', 'ASC')
+      .addOrderBy('b.startTime', 'ASC')
+      .getMany();
+
+    const currentBookings = await this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.date = :today', { today: todayKey })
+      .andWhere('b.startTime <= :nowKey', { nowKey })
+      .getMany();
+
+    const allBookings = [...currentBookings, ...upcomingBookings];
+    const allUserIds = [...new Set(allBookings.map((b) => b.userId))];
+
+    const [allAmenities, users] = await Promise.all([
+      this.amenitiesService.listAll(),
+      this.usersService.findByIds(allUserIds),
+    ]);
+
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const toBookingInfo = (b: typeof allBookings[0]) => {
+      const user = userById.get(b.userId);
+      return {
+        userName: user?.name ?? '',
+        userEmail: user?.email ?? '',
+        building: user?.building ?? '',
+        apartmentNumber: user?.apartmentNumber ?? '',
+        startTime: b.startTime,
+        slotLength: b.slotLength,
+        date: b.date,
+      };
+    };
+
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return allAmenities.map((amenity) => {
+      const amenityCurrent = currentBookings.find((b) => {
+        if (b.amenityId !== amenity.id) return false;
+        const [h, m] = b.startTime.split(':').map(Number);
+        const startMinutes = h * 60 + m;
+        const endMinutes = startMinutes + b.slotLength;
+        return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+      });
+
+      const amenityNext = upcomingBookings.find((b) => b.amenityId === amenity.id);
+
+      return {
+        id: amenity.id,
+        name: amenity.name,
+        currentBooking: amenityCurrent ? toBookingInfo(amenityCurrent) : null,
+        nextBooking: amenityNext ? toBookingInfo(amenityNext) : null,
       };
     });
   }

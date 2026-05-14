@@ -105,6 +105,7 @@ export class AdminController {
       building: string;
       apartmentNumber: string;
       isSuper?: boolean;
+      isSecurity?: boolean;
     },
   ) {
     const user = await this.usersService.create({
@@ -117,6 +118,8 @@ export class AdminController {
     await this.usersService.updateEmailVerification(user.id, true);
     if (body.isSuper) {
       await this.usersService.updateUserRole(user.id, UserRole.SUPER);
+    } else if (body.isSecurity) {
+      await this.usersService.updateUserRole(user.id, UserRole.SECURITY);
     }
     return { id: user.id };
   }

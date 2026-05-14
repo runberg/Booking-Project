@@ -34,7 +34,20 @@ export class BookingsController {
 
   @Get('me')
   async listMine(@Request() req) {
-    return this.bookingsService.listForUser(req.user.id);
+    return this.bookingsService.listUpcomingForUser(req.user.id);
+  }
+
+  @Get('me/past')
+  async listMinePast(
+    @Request() req,
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '10',
+  ) {
+    return this.bookingsService.listPastForUser(
+      req.user.id,
+      Number(page) || 1,
+      Number(pageSize) || 10,
+    );
   }
 
   @Get('upcoming')

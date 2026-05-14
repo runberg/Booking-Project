@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import {
   RegisterDto,
@@ -15,6 +16,7 @@ import {
   VerifyEmailDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  ContactAdminDto,
 } from './dto/auth.dto';
 import { AuthResponseDto } from './dto/response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -58,6 +60,13 @@ export class AuthController {
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<{ message: string }> {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('contact-admin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 3_600_000, limit: 3 } })
+  async contactAdmin(@Body() dto: ContactAdminDto) {
+    return this.authService.contactAdmin(dto);
   }
 
   @UseGuards(JwtAuthGuard)

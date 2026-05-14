@@ -132,7 +132,11 @@ export const authService = {
       const response = await api.post<ApiResponse>('/auth/register', data);
       return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Registration failed');
+      const err: Error & { statusCode?: number } = new Error(
+        error.response?.data?.message || 'Registration failed',
+      );
+      err.statusCode = error.response?.status;
+      throw err;
     }
   },
 

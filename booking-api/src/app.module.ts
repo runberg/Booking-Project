@@ -11,6 +11,7 @@ import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
 import { User } from './users/user.entity';
 import { Building } from './buildings/building.entity';
+import { BuildingUnit } from './buildings/building-unit.entity';
 import { BuildingsModule } from './buildings/buildings.module';
 import { Amenity } from './amenities/amenity.entity';
 import { AmenitiesModule } from './amenities/amenities.module';
@@ -21,6 +22,9 @@ import { BookingLog } from './bookings/booking-log.entity';
 import { BookingsModule } from './bookings/bookings.module';
 import { EmailTemplate } from './email-templates/email-template.entity';
 import { EmailTemplatesModule } from './email-templates/email-templates.module';
+import { Setting } from './settings/setting.entity';
+import { SettingsModule } from './settings/settings.module';
+import { SecurityModule } from './security/security.module';
 
 @Module({
   imports: [
@@ -33,11 +37,13 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
         entities: [
           User,
           Building,
+          BuildingUnit,
           Amenity,
           BookingRestriction,
           Booking,
           BookingLog,
           EmailTemplate,
+          Setting,
         ],
         // synchronize auto-creates tables on startup.
         // For schema changes after initial deploy, generate TypeORM migrations instead.
@@ -58,6 +64,8 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
     RestrictionsModule,
     BookingsModule,
     EmailTemplatesModule,
+    SettingsModule,
+    SecurityModule,
   ],
   controllers: [AppController, HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

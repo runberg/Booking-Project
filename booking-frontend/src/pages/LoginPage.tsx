@@ -75,8 +75,12 @@ export const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      await authService.login(data);
-      navigate('/bookings');
+      const result = await authService.login(data);
+      if (result.user?.role === 'security') {
+        navigate('/security');
+      } else {
+        navigate('/bookings');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

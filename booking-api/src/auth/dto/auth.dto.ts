@@ -6,6 +6,31 @@ import {
   Matches,
 } from 'class-validator';
 
+export class ContactAdminDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  building: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  unit: string;
+
+  @IsString()
+  @MinLength(10)
+  @MaxLength(1000)
+  message: string;
+}
+
 export class RegisterDto {
   @IsEmail()
   email: string;
