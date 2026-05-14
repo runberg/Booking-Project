@@ -1,4 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+} from 'typeorm';
 
 @Entity('booking_logs')
 export class BookingLog {
@@ -41,5 +46,3 @@ export class BookingLog {
   @CreateDateColumn()
   createdAt: Date;
 }
-
-

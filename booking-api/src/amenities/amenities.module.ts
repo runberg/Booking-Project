@@ -14,5 +14,3 @@ import { Booking } from '../bookings/booking.entity';
   exports: [AmenitiesService],
 })
 export class AmenitiesModule {}
-
-

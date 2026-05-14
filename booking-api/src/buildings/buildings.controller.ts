@@ -11,5 +11,3 @@ export class BuildingsController {
     return buildings.map((b) => ({ id: b.id, name: b.name }));
   }
 }
-
-

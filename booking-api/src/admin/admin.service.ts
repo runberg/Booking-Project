@@ -26,7 +26,7 @@ export class AdminService implements OnModuleInit {
 
     try {
       const existingAdmin = await this.usersService.findByEmail(adminEmail);
-      
+
       if (!existingAdmin) {
         // Create admin user - password will be automatically hashed by User entity's @BeforeInsert hook
         const adminUser = await this.usersService.create({

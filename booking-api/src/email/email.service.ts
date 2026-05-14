@@ -7,7 +7,10 @@ import { EmailTemplatesService } from '../email-templates/email-templates.servic
 export class EmailService {
   private transporter: nodemailer.Transporter;
 
-  constructor(private configService: ConfigService, private templates: EmailTemplatesService) {
+  constructor(
+    private configService: ConfigService,
+    private templates: EmailTemplatesService,
+  ) {
     const host = this.configService.get('SMTP_HOST', 'smtp.gmail.com');
     const port = Number(this.configService.get('SMTP_PORT', 587));
     const secure = port === 465; // use TLS for 465
@@ -26,20 +29,31 @@ export class EmailService {
     } as any);
   }
 
-  private renderTemplateBody(body: string, variables: Record<string, string>): string {
+  private renderTemplateBody(
+    body: string,
+    variables: Record<string, string>,
+  ): string {
     return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, key) => {
       const val = variables?.[key];
       return val != null ? String(val) : '';
     });
   }
 
-  async sendVerificationEmail(email: string, token: string, name: string): Promise<void> {
+  async sendVerificationEmail(
+    email: string,
+    token: string,
+    name: string,
+  ): Promise<void> {
     const verificationUrl = `${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/verify-email?token=${token}`;
     const tpl = await this.templates.getByKey('registration');
-    const body = this.renderTemplateBody(tpl?.body || 'Welcome {{name}}, please verify your email: {{verificationUrl}}', {
-      name,
-      verificationUrl,
-    });
+    const body = this.renderTemplateBody(
+      tpl?.body ||
+        'Welcome {{name}}, please verify your email: {{verificationUrl}}',
+      {
+        name,
+        verificationUrl,
+      },
+    );
     const mailOptions = {
       from: this.configService.get('SMTP_FROM', 'noreply@bookingapp.com'),
       to: email,
@@ -49,9 +63,13 @@ export class EmailService {
     await this.transporter.sendMail(mailOptions);
   }
 
-  async sendPasswordResetEmail(email: string, token: string, name: string): Promise<void> {
+  async sendPasswordResetEmail(
+    email: string,
+    token: string,
+    name: string,
+  ): Promise<void> {
     const resetUrl = `${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token=${token}`;
-    
+
     const mailOptions = {
       from: this.configService.get('SMTP_FROM', 'noreply@bookingapp.com'),
       to: email,
@@ -82,7 +100,11 @@ export class EmailService {
     await this.transporter.sendMail(mailOptions);
   }
 
-  async sendGenericEmail(email: string, subject: string, htmlOrText: string): Promise<void> {
+  async sendGenericEmail(
+    email: string,
+    subject: string,
+    htmlOrText: string,
+  ): Promise<void> {
     const mailOptions = {
       from: this.configService.get('SMTP_FROM', 'noreply@bookingapp.com'),
       to: email,
@@ -94,7 +116,12 @@ export class EmailService {
     await this.transporter.sendMail(mailOptions);
   }
 
-  async sendTemplateEmail(email: string, subject: string, key: string, variables: Record<string, string>): Promise<void> {
+  async sendTemplateEmail(
+    email: string,
+    subject: string,
+    key: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
     const tpl = await this.templates.getByKey(key);
     const body = this.renderTemplateBody(tpl?.body || '', variables);
     return this.sendGenericEmail(email, subject, body.replace(/\n/g, '<br/>'));

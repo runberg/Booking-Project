@@ -12,5 +12,3 @@ import { EmailTemplatesController } from './controllers/email-templates.controll
   exports: [EmailTemplatesService],
 })
 export class EmailTemplatesModule {}
-
-

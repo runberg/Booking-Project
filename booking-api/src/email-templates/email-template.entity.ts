@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Unique } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Unique,
+} from 'typeorm';
 
 @Entity('email_templates')
 @Unique(['key'])
@@ -18,5 +25,3 @@ export class EmailTemplate {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
-

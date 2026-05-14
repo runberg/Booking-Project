@@ -1,13 +1,43 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, FindOptionsWhere, Like } from 'typeorm';
+import { Repository, Between, SelectQueryBuilder } from 'typeorm';
 import { Booking } from './booking.entity';
 import { AmenitiesService } from '../amenities/amenities.service';
 import { UsersService } from '../users/users.service';
 import { BookingLog } from './booking-log.entity';
 
+type LogFilterParams = {
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
+  q?: string;
+  action?: string;
+  userEmail?: string;
+  userName?: string;
+  amenityName?: string;
+  building?: string;
+  apartmentNumber?: string;
+  date?: string;
+  startTime?: string;
+  slotLength?: number;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+const SORTABLE_LOG_COLUMNS = new Set([
+  'createdAt',
+  'action',
+  'userEmail',
+  'userName',
+  'amenityName',
+  'building',
+  'apartmentNumber',
+  'date',
+  'startTime',
+  'slotLength',
+]);
+
 @Injectable()
-export class BookingsService {
+export class BookingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Booking)
     private bookingsRepo: Repository<Booking>,
@@ -17,7 +47,17 @@ export class BookingsService {
     private logsRepo: Repository<BookingLog>,
   ) {}
 
-  async create(data: { userId: string; amenityId: string; date: string; startTime: string; slotLength: number }) {
+  async onModuleInit() {
+    await this.pruneOldLogs(90);
+  }
+
+  async create(data: {
+    userId: string;
+    amenityId: string;
+    date: string;
+    startTime: string;
+    slotLength: number;
+  }) {
     const booking = this.bookingsRepo.create(data);
     const saved = await this.bookingsRepo.save(booking);
     await this.writeLog('create', saved);
@@ -25,11 +65,17 @@ export class BookingsService {
   }
 
   async listForUser(userId: string) {
-    return this.bookingsRepo.find({ where: { userId }, order: { date: 'ASC', startTime: 'ASC' } });
+    return this.bookingsRepo.find({
+      where: { userId },
+      order: { date: 'ASC', startTime: 'ASC' },
+    });
   }
 
   async listForAmenityOnDate(amenityId: string, date: string) {
-    return this.bookingsRepo.find({ where: { amenityId, date }, order: { startTime: 'ASC' } });
+    return this.bookingsRepo.find({
+      where: { amenityId, date },
+      order: { startTime: 'ASC' },
+    });
   }
 
   async deleteIfOwned(id: string, userId: string) {
@@ -44,7 +90,12 @@ export class BookingsService {
     return res;
   }
 
-  async countForUserInRange(params: { userId: string; amenityId: string; startDate: string; endDate: string }) {
+  async countForUserInRange(params: {
+    userId: string;
+    amenityId: string;
+    startDate: string;
+    endDate: string;
+  }) {
     const { userId, amenityId, startDate, endDate } = params;
     return this.bookingsRepo.count({
       where: {
@@ -56,33 +107,41 @@ export class BookingsService {
   }
 
   async findLatestForUser(userId: string) {
-    return this.bookingsRepo.findOne({ where: { userId }, order: { createdAt: 'DESC' } });
+    return this.bookingsRepo.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async listUpcoming(limit = 10) {
     const now = new Date();
-    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const nowKey = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowKey = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-    // Query next bookings, excluding past
     const items = await this.bookingsRepo
       .createQueryBuilder('b')
       .where('b.date > :today', { today: todayKey })
-      .orWhere('(b.date = :today AND b.startTime >= :startTime)', { today: todayKey, startTime: nowKey })
+      .orWhere('(b.date = :today AND b.startTime >= :startTime)', {
+        today: todayKey,
+        startTime: nowKey,
+      })
       .orderBy('b.date', 'ASC')
       .addOrderBy('b.startTime', 'ASC')
       .limit(limit)
       .getMany();
 
-    // Map with amenity and user details
-    const allAmenities = await this.amenitiesService.listAll();
+    const [allAmenities, users] = await Promise.all([
+      this.amenitiesService.listAll(),
+      this.usersService.findByIds([...new Set(items.map((b) => b.userId))]),
+    ]);
     const amenityById = new Map(allAmenities.map((a) => [a.id, a]));
+    const userById = new Map(users.map((u) => [u.id, u]));
 
-    const result = [] as Array<{ id: string; amenityName: string; date: string; startTime: string; slotLength: number; userName: string; building: string; apartmentNumber: string }>;
-    for (const b of items) {
-      const user = await this.usersService.findById(b.userId);
+    return items.map((b) => {
+      const user = userById.get(b.userId);
       const amenity = amenityById.get(b.amenityId);
-      result.push({
+      return {
         id: b.id,
         amenityName: amenity?.name ?? 'Amenity',
         date: b.date,
@@ -91,14 +150,15 @@ export class BookingsService {
         userName: user?.name ?? 'User',
         building: user?.building ?? '',
         apartmentNumber: user?.apartmentNumber ?? '',
-      });
-    }
-    return result;
+      };
+    });
   }
 
   private async writeLog(action: 'create' | 'delete', b: Booking) {
-    const user = await this.usersService.findById(b.userId);
-    const amenity = await this.amenitiesService.findOne(b.amenityId);
+    const [user, amenity] = await Promise.all([
+      this.usersService.findById(b.userId),
+      this.amenitiesService.findOne(b.amenityId),
+    ]);
     const log = this.logsRepo.create({
       action,
       bookingId: b.id,
@@ -115,98 +175,111 @@ export class BookingsService {
     await this.logsRepo.save(log);
   }
 
-  async listLogs(params: { page: number; pageSize: number; sortBy?: string; sortDir?: 'ASC' | 'DESC'; q?: string; action?: string; userEmail?: string; userName?: string; amenityName?: string; building?: string; apartmentNumber?: string; date?: string; startTime?: string; slotLength?: number; dateFrom?: string; dateTo?: string }) {
-    const { page, pageSize, sortBy = 'createdAt', sortDir = 'DESC', q, action, userEmail, userName, amenityName, building, apartmentNumber, date, startTime, slotLength, dateFrom, dateTo } = params;
-    await this.pruneOldLogs(90);
-    const where: FindOptionsWhere<BookingLog> = {} as any;
-    if (action) (where as any).action = action;
-    if (userEmail) (where as any).userEmail = Like(`%${userEmail}%`);
-    if (userName) (where as any).userName = Like(`%${userName}%`);
-    if (amenityName) (where as any).amenityName = Like(`%${amenityName}%`);
-    if (building) (where as any).building = Like(`%${building}%`);
-    if (apartmentNumber) (where as any).apartmentNumber = Like(`%${apartmentNumber}%`);
-    if (date) (where as any).date = date;
-    if (startTime) (where as any).startTime = startTime;
-    if (slotLength) (where as any).slotLength = slotLength as any;
-    // Use query builder to support createdAt range filter
-    const qb = this.logsRepo.createQueryBuilder('l');
-    // where object fields
-    Object.entries(where).forEach(([k, v]) => {
-      if (v == null) return;
-      if (typeof v === 'string' && v.includes('%')) {
-        qb.andWhere(`l.${k} LIKE :${k}`, { [k]: v });
-      } else {
-        qb.andWhere(`l.${k} = :${k}`, { [k]: v });
-      }
-    });
-    if (dateFrom) {
-      qb.andWhere('l.createdAt >= :dateFrom', { dateFrom });
-    }
-    if (dateTo) {
-      qb.andWhere('l.createdAt <= :dateTo', { dateTo });
-    }
-    if (q) {
-      qb.andWhere(
-        `(l.action LIKE :q OR l.userEmail LIKE :q OR l.userName LIKE :q OR l.amenityName LIKE :q OR l.building LIKE :q OR l.apartmentNumber LIKE :q OR l.date LIKE :q OR l.startTime LIKE :q)`,
-        { q: `%${q}%` },
-      );
-    }
-    qb.orderBy(`l.${sortBy}`, sortDir as any)
-      .skip((page - 1) * pageSize)
-      .take(pageSize);
-    const [items, total] = await qb.getManyAndCount();
-    return { items, total, page, pageSize };
-  }
+  private buildLogQuery(
+    params: LogFilterParams,
+  ): SelectQueryBuilder<BookingLog> {
+    const {
+      sortBy = 'createdAt',
+      sortDir = 'DESC',
+      q,
+      action,
+      userEmail,
+      userName,
+      amenityName,
+      building,
+      apartmentNumber,
+      date,
+      startTime,
+      slotLength,
+      dateFrom,
+      dateTo,
+    } = params;
 
-  async exportLogsCsv(params: { sortBy?: string; sortDir?: 'ASC' | 'DESC'; q?: string; action?: string; userEmail?: string; userName?: string; amenityName?: string; building?: string; apartmentNumber?: string; date?: string; startTime?: string; slotLength?: number; dateFrom?: string; dateTo?: string }) {
-    const { sortBy = 'createdAt', sortDir = 'DESC', q, action, userEmail, userName, amenityName, building, apartmentNumber, date, startTime, slotLength, dateFrom, dateTo } = params;
-    const where: FindOptionsWhere<BookingLog> = {} as any;
-    if (action) (where as any).action = action;
-    if (userEmail) (where as any).userEmail = Like(`%${userEmail}%`);
-    if (userName) (where as any).userName = Like(`%${userName}%`);
-    if (amenityName) (where as any).amenityName = Like(`%${amenityName}%`);
-    if (building) (where as any).building = Like(`%${building}%`);
-    if (apartmentNumber) (where as any).apartmentNumber = Like(`%${apartmentNumber}%`);
-    if (date) (where as any).date = date;
-    if (startTime) (where as any).startTime = startTime;
-    if (slotLength) (where as any).slotLength = slotLength as any;
+    const safeSortBy = SORTABLE_LOG_COLUMNS.has(sortBy) ? sortBy : 'createdAt';
     const qb = this.logsRepo.createQueryBuilder('l');
-    Object.entries(where).forEach(([k, v]) => {
-      if (v == null) return;
-      if (typeof v === 'string' && v.includes('%')) {
-        qb.andWhere(`l.${k} LIKE :${k}`, { [k]: v });
-      } else {
-        qb.andWhere(`l.${k} = :${k}`, { [k]: v });
-      }
-    });
+
+    if (action) qb.andWhere('l.action = :action', { action });
+    if (userEmail)
+      qb.andWhere('l.userEmail LIKE :userEmail', {
+        userEmail: `%${userEmail}%`,
+      });
+    if (userName)
+      qb.andWhere('l.userName LIKE :userName', { userName: `%${userName}%` });
+    if (amenityName)
+      qb.andWhere('l.amenityName LIKE :amenityName', {
+        amenityName: `%${amenityName}%`,
+      });
+    if (building)
+      qb.andWhere('l.building LIKE :building', { building: `%${building}%` });
+    if (apartmentNumber)
+      qb.andWhere('l.apartmentNumber LIKE :apartmentNumber', {
+        apartmentNumber: `%${apartmentNumber}%`,
+      });
+    if (date) qb.andWhere('l.date = :date', { date });
+    if (startTime) qb.andWhere('l.startTime = :startTime', { startTime });
+    if (slotLength != null)
+      qb.andWhere('l.slotLength = :slotLength', { slotLength });
     if (dateFrom) qb.andWhere('l.createdAt >= :dateFrom', { dateFrom });
     if (dateTo) qb.andWhere('l.createdAt <= :dateTo', { dateTo });
     if (q) {
       qb.andWhere(
-        `(l.action LIKE :q OR l.userEmail LIKE :q OR l.userName LIKE :q OR l.amenityName LIKE :q OR l.building LIKE :q OR l.apartmentNumber LIKE :q OR l.date LIKE :q OR l.startTime LIKE :q)`,
+        '(l.action LIKE :q OR l.userEmail LIKE :q OR l.userName LIKE :q OR l.amenityName LIKE :q OR l.building LIKE :q OR l.apartmentNumber LIKE :q OR l.date LIKE :q OR l.startTime LIKE :q)',
         { q: `%${q}%` },
       );
     }
-    const rows = await qb.orderBy(`l.${sortBy}`, sortDir as any).take(10000).getMany();
-    const headers = ['Time','Action','Amenity','Date','Start','Length','User','Email','Building','Apartment'];
+
+    qb.orderBy(`l.${safeSortBy}`, sortDir as 'ASC' | 'DESC');
+    return qb;
+  }
+
+  async listLogs(
+    params: LogFilterParams & { page: number; pageSize: number },
+  ) {
+    const { page, pageSize, ...filterParams } = params;
+    const qb = this.buildLogQuery(filterParams);
+    qb.skip((page - 1) * pageSize).take(pageSize);
+    const [items, total] = await qb.getManyAndCount();
+    return { items, total, page, pageSize };
+  }
+
+  async exportLogsCsv(params: LogFilterParams): Promise<string> {
+    const rows = await this.buildLogQuery(params).take(10000).getMany();
+
+    const escape = (v: string) =>
+      v.includes(',') || v.includes('"') || v.includes('\n')
+        ? '"' + v.replace(/"/g, '""') + '"'
+        : v;
+
+    const headers = [
+      'Time',
+      'Action',
+      'Amenity',
+      'Date',
+      'Start',
+      'Length',
+      'User',
+      'Email',
+      'Building',
+      'Apartment',
+    ];
     const lines = [headers.join(',')];
     for (const l of rows) {
-      const vals = [
-        new Date(l.createdAt).toISOString(),
-        l.action,
-        l.amenityName,
-        l.date,
-        l.startTime,
-        String(l.slotLength),
-        l.userName,
-        l.userEmail,
-        l.building,
-        l.apartmentNumber,
-      ].map((v) => {
-        const s = String(v ?? '');
-        return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
-      });
-      lines.push(vals.join(','));
+      lines.push(
+        [
+          new Date(l.createdAt).toISOString(),
+          l.action,
+          l.amenityName,
+          l.date,
+          l.startTime,
+          String(l.slotLength),
+          l.userName,
+          l.userEmail,
+          l.building,
+          l.apartmentNumber,
+        ]
+          .map((v) => escape(String(v ?? '')))
+          .join(','),
+      );
     }
     return lines.join('\n');
   }
@@ -214,12 +287,11 @@ export class BookingsService {
   private async pruneOldLogs(days: number) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    await this.logsRepo.createQueryBuilder()
+    await this.logsRepo
+      .createQueryBuilder()
       .delete()
       .from(BookingLog)
       .where('createdAt < :cutoff', { cutoff: cutoff.toISOString() })
       .execute();
   }
 }
-
-

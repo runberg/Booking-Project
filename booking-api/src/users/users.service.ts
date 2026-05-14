@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
+import { In, Repository, MoreThan } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterDto } from '../auth/dto/auth.dto';
 
@@ -19,10 +19,15 @@ export class UsersService {
 
     // Ensure no other user has the same building + apartment number
     const existingUnit = await this.usersRepository.findOne({
-      where: { building: registerDto.building, apartmentNumber: registerDto.apartmentNumber },
+      where: {
+        building: registerDto.building,
+        apartmentNumber: registerDto.apartmentNumber,
+      },
     });
     if (existingUnit) {
-      throw new ConflictException('This building and apartment number is already registered');
+      throw new ConflictException(
+        'This building and apartment number is already registered',
+      );
     }
 
     const user = this.usersRepository.create(registerDto);
@@ -37,25 +42,33 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
+  async findByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    return this.usersRepository.findBy({ id: In(ids) });
+  }
+
   async findByEmailVerificationToken(token: string): Promise<User | null> {
-    return this.usersRepository.findOne({ 
-      where: { 
+    return this.usersRepository.findOne({
+      where: {
         emailVerificationToken: token,
-        emailVerificationExpires: MoreThan(new Date())
-      } 
+        emailVerificationExpires: MoreThan(new Date()),
+      },
     });
   }
 
   async findByPasswordResetToken(token: string): Promise<User | null> {
-    return this.usersRepository.findOne({ 
-      where: { 
+    return this.usersRepository.findOne({
+      where: {
         passwordResetToken: token,
-        passwordResetExpires: MoreThan(new Date())
-      } 
+        passwordResetExpires: MoreThan(new Date()),
+      },
     });
   }
 
-  async updateEmailVerification(userId: string, isVerified: boolean): Promise<void> {
+  async updateEmailVerification(
+    userId: string,
+    isVerified: boolean,
+  ): Promise<void> {
     await this.usersRepository.update(userId, {
       isEmailVerified: isVerified,
       emailVerificationToken: undefined,
@@ -63,14 +76,22 @@ export class UsersService {
     });
   }
 
-  async updateEmailVerificationToken(userId: string, token: string, expiresAt: Date): Promise<void> {
+  async updateEmailVerificationToken(
+    userId: string,
+    token: string,
+    expiresAt: Date,
+  ): Promise<void> {
     await this.usersRepository.update(userId, {
       emailVerificationToken: token,
       emailVerificationExpires: expiresAt,
     });
   }
 
-  async updatePasswordResetToken(userId: string, token: string, expiresAt: Date): Promise<void> {
+  async updatePasswordResetToken(
+    userId: string,
+    token: string,
+    expiresAt: Date,
+  ): Promise<void> {
     await this.usersRepository.update(userId, {
       passwordResetToken: token,
       passwordResetExpires: expiresAt,

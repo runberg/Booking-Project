@@ -8,5 +8,3 @@ export class UserThrottlerGuard extends ThrottlerGuard {
     return (req.user?.id as string) || (req.ip as string) || 'anonymous';
   }
 }
-
-

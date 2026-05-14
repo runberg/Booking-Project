@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { AmenitiesService } from '../amenities.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { UserRole } from '../../users/user.entity';
@@ -21,13 +31,39 @@ export class AdminAmenitiesController {
   }
 
   @Post()
-  async create(@Body() body: { name: string; description?: string; openTime?: string; closeTime?: string; imageUrl?: string; slotLength?: number; isActive?: boolean }, @Request() req) {
+  async create(
+    @Body()
+    body: {
+      name: string;
+      description?: string;
+      openTime?: string;
+      closeTime?: string;
+      imageUrl?: string;
+      slotLength?: number;
+      isActive?: boolean;
+    },
+    @Request() req,
+  ) {
     this.ensureAdminOrSuper(req);
     return this.amenitiesService.create(body);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() body: { name?: string; description?: string; openTime?: string; closeTime?: string; imageUrl?: string; slotLength?: number; isActive?: boolean; bookingRestrictionId?: string | null }, @Request() req) {
+  async update(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      description?: string;
+      openTime?: string;
+      closeTime?: string;
+      imageUrl?: string;
+      slotLength?: number;
+      isActive?: boolean;
+      bookingRestrictionId?: string | null;
+    },
+    @Request() req,
+  ) {
     this.ensureAdminOrSuper(req);
     return this.amenitiesService.update(id, body);
   }
@@ -39,5 +75,3 @@ export class AdminAmenitiesController {
     return { message: 'Amenity deleted' };
   }
 }
-
-

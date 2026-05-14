@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { RestrictionsService } from '../restrictions.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { UserRole } from '../../users/user.entity';
@@ -21,13 +31,34 @@ export class AdminRestrictionsController {
   }
 
   @Post()
-  async create(@Body() body: { name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number; isActive?: boolean }, @Request() req) {
+  async create(
+    @Body()
+    body: {
+      name: string;
+      daysAhead: number;
+      maxPerPeriod: number;
+      maxPerDay: number;
+      isActive?: boolean;
+    },
+    @Request() req,
+  ) {
     this.ensureAdminOrSuper(req);
     return this.restrictionsService.create(body);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() body: Partial<{ name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number; isActive: boolean }>, @Request() req) {
+  async update(
+    @Param('id') id: string,
+    @Body()
+    body: Partial<{
+      name: string;
+      daysAhead: number;
+      maxPerPeriod: number;
+      maxPerDay: number;
+      isActive: boolean;
+    }>,
+    @Request() req,
+  ) {
     this.ensureAdminOrSuper(req);
     return this.restrictionsService.update(id, body);
   }
@@ -39,5 +70,3 @@ export class AdminRestrictionsController {
     return { message: 'Restriction deleted' };
   }
 }
-
-

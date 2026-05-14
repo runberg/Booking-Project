@@ -17,4 +17,3 @@ export class EmailTemplatesController {
     return { text: template?.body || 'Legal note - Booking confirmation' };
   }
 }
-

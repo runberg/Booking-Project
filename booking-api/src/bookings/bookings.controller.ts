@@ -1,6 +1,21 @@
-import { Body, Controller, Get, Post, Query, Param, Request, UseGuards, ConflictException, Delete } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  Request,
+  UseGuards,
+  ConflictException,
+  ForbiddenException,
+  Delete,
+} from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../users/user.entity';
 import { EmailService } from '../email/email.service';
 import { AmenitiesService } from '../amenities/amenities.service';
 import { RestrictionsService } from '../restrictions/restrictions.service';
@@ -8,7 +23,7 @@ import { Throttle, ThrottlerException, SkipThrottle } from '@nestjs/throttler';
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 @Controller('bookings')
-@UseGuards(JwtAuthGuard, UserThrottlerGuard)
+@UseGuards(JwtAuthGuard, UserThrottlerGuard, RolesGuard)
 export class BookingsController {
   constructor(
     private bookingsService: BookingsService,
@@ -19,22 +34,19 @@ export class BookingsController {
 
   @Get('me')
   async listMine(@Request() req) {
-    const userId = req.user.id;
-    return this.bookingsService.listForUser(userId);
+    return this.bookingsService.listForUser(req.user.id);
   }
 
   @Get('upcoming')
   @SkipThrottle()
-  async listUpcoming(@Request() req) {
-    if (req.user?.role !== 'admin') {
-      throw new ConflictException('Unauthorized');
-    }
+  @Roles(UserRole.ADMIN)
+  async listUpcoming() {
     return this.bookingsService.listUpcoming(10);
   }
 
   @Get('logs')
+  @Roles(UserRole.ADMIN)
   async listLogs(
-    @Request() req,
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '20',
     @Query('sortBy') sortBy?: string,
@@ -52,9 +64,6 @@ export class BookingsController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    if (req.user?.role !== 'admin') {
-      throw new ConflictException('Unauthorized');
-    }
     return this.bookingsService.listLogs({
       page: Number(page) || 1,
       pageSize: Number(pageSize) || 20,
@@ -76,8 +85,8 @@ export class BookingsController {
   }
 
   @Get('logs/export')
+  @Roles(UserRole.ADMIN)
   async exportLogs(
-    @Request() req,
     @Query('sortBy') sortBy?: string,
     @Query('sortDir') sortDir?: 'ASC' | 'DESC',
     @Query('q') q?: string,
@@ -91,36 +100,61 @@ export class BookingsController {
     @Query('startTime') startTime?: string,
     @Query('slotLength') slotLength?: string,
   ) {
-    if (req.user?.role !== 'admin') {
-      throw new ConflictException('Unauthorized');
-    }
-    const csv = await this.bookingsService.exportLogsCsv({ sortBy, sortDir, q, action, userEmail, userName, amenityName, building, apartmentNumber, date, startTime, slotLength: slotLength ? Number(slotLength) : undefined });
-    return csv;
+    return this.bookingsService.exportLogsCsv({
+      sortBy,
+      sortDir,
+      q,
+      action,
+      userEmail,
+      userName,
+      amenityName,
+      building,
+      apartmentNumber,
+      date,
+      startTime,
+      slotLength: slotLength ? Number(slotLength) : undefined,
+    });
   }
 
   @Post()
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
-  async create(@Body() body: { amenityId: string; date: string; startTime: string; slotLength: number }, @Request() req) {
+  async create(
+    @Body()
+    body: {
+      amenityId: string;
+      date: string;
+      startTime: string;
+      slotLength: number;
+    },
+    @Request() req,
+  ) {
     const userId = req.user.id;
-    // cooldown: require 30s between bookings per user
+
     const latest = await this.bookingsService.findLatestForUser(userId);
     if (latest) {
       const diffMs = Date.now() - new Date(latest.createdAt).getTime();
       if (diffMs < 30_000) {
-        throw new ThrottlerException('Please wait 30 seconds before creating another booking');
+        throw new ThrottlerException(
+          'Please wait 30 seconds before creating another booking',
+        );
       }
     }
-    // prevent double-booking exact same slot
-    const existing = await this.bookingsService.listForAmenityOnDate(body.amenityId, body.date);
+
+    const existing = await this.bookingsService.listForAmenityOnDate(
+      body.amenityId,
+      body.date,
+    );
     if (existing.some((b) => b.startTime === body.startTime)) {
       throw new ConflictException('This time slot is already booked');
     }
-    // enforce period limit if restriction applies
+
     const amenity = await this.amenitiesService.findOne(body.amenityId);
     let daysAhead = 14;
     let maxPerPeriod: number | null = null;
     if (amenity?.bookingRestrictionId) {
-      const rr = await this.restrictionsService.findOne(amenity.bookingRestrictionId);
+      const rr = await this.restrictionsService.findOne(
+        amenity.bookingRestrictionId,
+      );
       if (rr) {
         daysAhead = rr.daysAhead ?? daysAhead;
         maxPerPeriod = (rr.maxPerPeriod as any) ?? null;
@@ -128,28 +162,36 @@ export class BookingsController {
     }
     if (maxPerPeriod != null && maxPerPeriod > 0) {
       const now = new Date();
-      const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const startDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const end = new Date(now);
       end.setDate(end.getDate() + daysAhead);
-      const endDate = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-      const count = await this.bookingsService.countForUserInRange({ userId, amenityId: body.amenityId, startDate, endDate });
+      const endDate = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+      const count = await this.bookingsService.countForUserInRange({
+        userId,
+        amenityId: body.amenityId,
+        startDate,
+        endDate,
+      });
       if (count >= maxPerPeriod) {
-        throw new ConflictException('You have reached the limit of bookings as per the restrictions set');
+        throw new ConflictException(
+          'You have reached the limit of bookings as per the restrictions set',
+        );
       }
     }
+
     const booking = await this.bookingsService.create({ userId, ...body });
 
-    // email confirmation (best-effort, non-blocking)
     (async () => {
       try {
-        const amenity = await this.amenitiesService.findOne(body.amenityId);
+        const a = await this.amenitiesService.findOne(body.amenityId);
         await this.emailService.sendTemplateEmail(
           req.user.email,
           'Booking Confirmation',
           'booking_confirmation',
           {
             name: req.user.name,
-            amenity: amenity?.name ?? 'Amenity',
+            amenity: a?.name ?? 'Amenity',
             date: body.date,
             time: body.startTime,
           },
@@ -161,20 +203,23 @@ export class BookingsController {
   }
 
   @Get('amenity/:id')
-  async listForAmenityOnDate(@Param('id') amenityId: string, @Query('date') date: string) {
-    const list = await this.bookingsService.listForAmenityOnDate(amenityId, date);
+  async listForAmenityOnDate(
+    @Param('id') amenityId: string,
+    @Query('date') date: string,
+  ) {
+    const list = await this.bookingsService.listForAmenityOnDate(
+      amenityId,
+      date,
+    );
     return list.map((b) => b.startTime);
   }
 
   @Delete(':id')
   async deleteMine(@Param('id') id: string, @Request() req) {
-    const userId = req.user.id;
-    const res = await this.bookingsService.deleteIfOwned(id, userId);
+    const res = await this.bookingsService.deleteIfOwned(id, req.user.id);
     if (res.affected === 0) {
-      return { message: 'Not found' };
+      throw new ForbiddenException('Booking not found or not owned by you');
     }
     return { message: 'Booking deleted' };
   }
 }
-
-

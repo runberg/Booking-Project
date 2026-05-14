@@ -7,8 +7,9 @@ export class AppController {
     return {
       name: 'Booking API',
       version: '1.0.0',
-      description: 'API for booking amenities like badminton, tennis, and paddle courts',
-      status: 'running'
+      description:
+        'API for booking amenities like badminton, tennis, and paddle courts',
+      status: 'running',
     };
   }
 }

@@ -1,9 +1,19 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../email/email.service';
-import { RegisterDto, LoginDto, VerifyEmailDto, ForgotPasswordDto, ResetPasswordDto } from './dto/auth.dto';
+import {
+  RegisterDto,
+  LoginDto,
+  VerifyEmailDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
 import { AuthResponseDto } from './dto/response.dto';
 import { User } from '../users/user.entity';
 import * as crypto from 'crypto';
@@ -27,7 +37,11 @@ export class AuthService {
     expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours
 
     // Save verification token
-    await this.usersService.updateEmailVerificationToken(user.id, verificationToken, expiresAt);
+    await this.usersService.updateEmailVerificationToken(
+      user.id,
+      verificationToken,
+      expiresAt,
+    );
 
     // Send verification email
     await this.emailService.sendVerificationEmail(
@@ -36,7 +50,10 @@ export class AuthService {
       user.name,
     );
 
-    return { message: 'Registration successful. Please check your email to verify your account.' };
+    return {
+      message:
+        'Registration successful. Please check your email to verify your account.',
+    };
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
@@ -51,7 +68,9 @@ export class AuthService {
     }
 
     if (!user.isEmailVerified) {
-      throw new BadRequestException('Please verify your email address before logging in');
+      throw new BadRequestException(
+        'Please verify your email address before logging in',
+      );
     }
 
     if (!user.isActive) {
@@ -59,15 +78,19 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user);
-    
+
     return {
       user: this.sanitizeUser(user),
       ...tokens,
     };
   }
 
-  async verifyEmail(verifyEmailDto: VerifyEmailDto): Promise<{ message: string }> {
-    const user = await this.usersService.findByEmailVerificationToken(verifyEmailDto.token);
+  async verifyEmail(
+    verifyEmailDto: VerifyEmailDto,
+  ): Promise<{ message: string }> {
+    const user = await this.usersService.findByEmailVerificationToken(
+      verifyEmailDto.token,
+    );
     if (!user) {
       throw new BadRequestException('Invalid or expired verification token');
     }
@@ -77,11 +100,16 @@ export class AuthService {
     return { message: 'Email verified successfully. You can now log in.' };
   }
 
-  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+  async forgotPassword(
+    forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<{ message: string }> {
     const user = await this.usersService.findByEmail(forgotPasswordDto.email);
     if (!user) {
       // Don't reveal if user exists or not
-      return { message: 'If an account with this email exists, a password reset link has been sent.' };
+      return {
+        message:
+          'If an account with this email exists, a password reset link has been sent.',
+      };
     }
 
     // Generate password reset token
@@ -90,7 +118,11 @@ export class AuthService {
     expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour
 
     // Save reset token
-    await this.usersService.updatePasswordResetToken(user.id, resetToken, expiresAt);
+    await this.usersService.updatePasswordResetToken(
+      user.id,
+      resetToken,
+      expiresAt,
+    );
 
     // Send reset email
     await this.emailService.sendPasswordResetEmail(
@@ -99,32 +131,47 @@ export class AuthService {
       user.name,
     );
 
-    return { message: 'If an account with this email exists, a password reset link has been sent.' };
+    return {
+      message:
+        'If an account with this email exists, a password reset link has been sent.',
+    };
   }
 
-  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const user = await this.usersService.findByPasswordResetToken(resetPasswordDto.token);
+  async resetPassword(
+    resetPasswordDto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    const user = await this.usersService.findByPasswordResetToken(
+      resetPasswordDto.token,
+    );
     if (!user) {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
-    await this.usersService.updatePassword(user.id, resetPasswordDto.newPassword);
+    await this.usersService.updatePassword(
+      user.id,
+      resetPasswordDto.newPassword,
+    );
 
-    return { message: 'Password reset successfully. You can now log in with your new password.' };
+    return {
+      message:
+        'Password reset successfully. You can now log in with your new password.',
+    };
   }
 
   async refreshToken(user: User): Promise<AuthResponseDto> {
     const tokens = await this.generateTokens(user);
-    
+
     return {
       user: this.sanitizeUser(user),
       ...tokens,
     };
   }
 
-  private async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string }> {
-    const payload = { 
-      email: user.email, 
+  private async generateTokens(
+    user: User,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const payload = {
+      email: user.email,
       sub: user.id,
       role: user.role,
     };
@@ -143,7 +190,9 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  private sanitizeUser(user: User): Omit<User, 'password' | 'hashPassword' | 'validatePassword'> {
+  private sanitizeUser(
+    user: User,
+  ): Omit<User, 'password' | 'hashPassword' | 'validatePassword'> {
     const { password, hashPassword, validatePassword, ...sanitizedUser } = user;
     return sanitizedUser;
   }

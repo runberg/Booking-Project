@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Unique } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Unique,
+} from 'typeorm';
 
 @Entity('amenities')
 @Unique(['name'])
@@ -40,5 +47,3 @@ export class Amenity {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
-

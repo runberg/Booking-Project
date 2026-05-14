@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Unique } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Unique,
+} from 'typeorm';
 
 @Entity('booking_restrictions')
 @Unique(['name'])
@@ -27,5 +34,3 @@ export class BookingRestriction {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
-

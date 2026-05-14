@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Put, UseGuards, Request, ConflictException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Put,
+  UseGuards,
+  Request,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { EmailTemplatesService } from '../email-templates.service';
 
@@ -16,7 +25,11 @@ export class AdminEmailTemplatesController {
   }
 
   @Put(':key')
-  async update(@Param('key') key: string, @Body() body: { body: string }, @Request() req) {
+  async update(
+    @Param('key') key: string,
+    @Body() body: { body: string },
+    @Request() req,
+  ) {
     if (!['admin', 'super'].includes(req.user?.role)) {
       throw new ConflictException('Unauthorized');
     }
@@ -26,5 +39,3 @@ export class AdminEmailTemplatesController {
     return this.svc.upsert(key, body.body);
   }
 }
-
-

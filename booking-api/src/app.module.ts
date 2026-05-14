@@ -24,69 +24,30 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
+    ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService) => {
-        const isProduction = configService.get('NODE_ENV') === 'production';
-        const dbPath = configService.get('DB_PATH', 'booking.db');
-        
-        // For fresh production deployments, enable synchronize if database doesn't exist or is empty
-        // This allows initial setup without migrations
-        let shouldSynchronize = !isProduction;
-        if (isProduction) {
-          const fs = require('fs');
-          try {
-            // Check if database file exists and has content
-            const dbExists = fs.existsSync(dbPath);
-            console.log(`📊 Database check: path=${dbPath}, exists=${dbExists}`);
-            if (!dbExists) {
-              shouldSynchronize = true;
-              console.log('⚠️  Fresh database detected - enabling synchronize for initial setup');
-            } else {
-              // Check database file size - if it's very small, it's likely empty
-              const stats = fs.statSync(dbPath);
-              console.log(`📊 Database size: ${stats.size} bytes`);
-              // SQLite database files with tables are typically > 2KB even when empty
-              // If smaller than 2KB, assume it needs tables created
-              if (stats.size < 2048) {
-                shouldSynchronize = true;
-                console.log('⚠️  Database appears empty or corrupted - enabling synchronize for initial setup');
-              } else {
-                console.log('✅ Database exists and appears to have content - synchronize disabled');
-              }
-            }
-          } catch (error: any) {
-            // If we can't check, assume it's fresh and enable synchronize
-            shouldSynchronize = true;
-            console.log('⚠️  Could not verify database state - enabling synchronize for initial setup');
-            console.log(`   Error: ${error.message || error}`);
-          }
-        }
-        
-        console.log(`📊 Database configuration: synchronize=${shouldSynchronize}, path=${dbPath}`);
-        
-        return {
-          type: 'sqlite',
-          database: dbPath,
-          entities: [User, Building, Amenity, BookingRestriction, Booking, BookingLog, EmailTemplate],
-          synchronize: shouldSynchronize,
-          logging: configService.get('NODE_ENV') === 'development',
-          // Enable WAL mode for better concurrency and performance
-          extra: {
-            journalMode: 'WAL',
-            synchronous: 'NORMAL',
-            busyTimeout: 5000,
-          },
-        };
-      },
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        url: configService.getOrThrow<string>('DATABASE_URL'),
+        entities: [
+          User,
+          Building,
+          Amenity,
+          BookingRestriction,
+          Booking,
+          BookingLog,
+          EmailTemplate,
+        ],
+        // synchronize auto-creates tables on startup.
+        // For schema changes after initial deploy, generate TypeORM migrations instead.
+        synchronize: true,
+        logging: configService.get('NODE_ENV') === 'development',
+      }),
       inject: [ConfigService],
     }),
     ThrottlerModule.forRoot([
-      { ttl: 60_000, limit: 60 }, // 60 req/min/IP (increased from 30 to handle normal browsing)
+      { ttl: 60_000, limit: 60 },
     ]),
     AuthModule,
     UsersModule,

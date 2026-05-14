@@ -1,13 +1,28 @@
-import { Controller, Get, Delete, Param, UseGuards, Request, Post } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import {
+  Controller,
+  Get,
+  Delete,
+  Param,
+  UseGuards,
+  Request,
+  Post,
+  Body,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../email/email.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/user.entity';
-import { Body } from '@nestjs/common';
 
 @Controller('admin')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.SUPER)
 export class AdminController {
   constructor(
     private adminService: AdminService,
@@ -16,14 +31,9 @@ export class AdminController {
   ) {}
 
   @Get('users')
-  async getAllUsers(@Request() req) {
-    // Admin or Super
-    if (![UserRole.ADMIN, UserRole.SUPER].includes(req.user.role)) {
-      throw new Error('Unauthorized: Admin access required');
-    }
-
+  async getAllUsers() {
     const users = await this.usersService.findAll();
-    return users.map(user => ({
+    return users.map((user) => ({
       id: user.id,
       email: user.email,
       name: user.name,
@@ -38,73 +48,65 @@ export class AdminController {
 
   @Delete('users/:id')
   async deleteUser(@Param('id') id: string, @Request() req) {
-    // Admin or Super
-    if (![UserRole.ADMIN, UserRole.SUPER].includes(req.user.role)) {
-      throw new Error('Unauthorized: Admin access required');
-    }
-
-    // Prevent admin from deleting themselves
     if (req.user.sub === id) {
-      throw new Error('Cannot delete your own account');
+      throw new ForbiddenException('Cannot delete your own account');
     }
-
     await this.usersService.deleteUser(id);
     return { message: 'User deleted successfully' };
   }
 
   @Post('users/:id/resend-verification')
-  async resendVerificationEmail(@Param('id') id: string, @Request() req) {
-    // Admin or Super
-    if (![UserRole.ADMIN, UserRole.SUPER].includes(req.user.role)) {
-      throw new Error('Unauthorized: Admin access required');
-    }
-
+  async resendVerificationEmail(@Param('id') id: string) {
     const user = await this.usersService.findById(id);
-    if (!user) {
-      throw new Error('User not found');
-    }
-
+    if (!user) throw new NotFoundException('User not found');
     if (user.isEmailVerified) {
-      throw new Error('User email is already verified');
+      throw new BadRequestException('User email is already verified');
     }
 
-    // Generate new verification token
-    const verificationToken = require('crypto').randomBytes(32).toString('hex');
+    const verificationToken = randomBytes(32).toString('hex');
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours
+    expiresAt.setHours(expiresAt.getHours() + 24);
 
-    // Save new verification token
-    await this.usersService.updateEmailVerificationToken(user.id, verificationToken, expiresAt);
-
-    // Send verification email
-    await this.emailService.sendVerificationEmail(user.email, verificationToken, user.name);
+    await this.usersService.updateEmailVerificationToken(
+      user.id,
+      verificationToken,
+      expiresAt,
+    );
+    await this.emailService.sendVerificationEmail(
+      user.email,
+      verificationToken,
+      user.name,
+    );
 
     return { message: 'Verification email sent successfully' };
   }
 
-  // Admin-only: change user role (promote/demote including super)
   @Post('users/:id/role')
-  async changeUserRole(@Param('id') id: string, @Request() req) {
-    if (req.user.role !== UserRole.ADMIN) {
-      throw new Error('Unauthorized: Only admins can change user roles');
-    }
-    const body = (req as any).body as { role: UserRole };
-    if (![UserRole.USER, UserRole.ADMIN, UserRole.SUPER].includes(body.role)) {
-      throw new Error('Invalid role');
+  @Roles(UserRole.ADMIN)
+  async changeUserRole(
+    @Param('id') id: string,
+    @Body() body: { role: UserRole },
+  ) {
+    if (!Object.values(UserRole).includes(body.role)) {
+      throw new BadRequestException('Invalid role');
     }
     await this.usersService.updateUserRole(id, body.role);
     return { message: 'User role updated' };
   }
 
-  // Admin-only: create user (optionally as super user)
   @Post('users')
+  @Roles(UserRole.ADMIN)
   async createUser(
-    @Body() body: { email: string; password: string; name: string; building: string; apartmentNumber: string; isSuper?: boolean },
-    @Request() req,
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      name: string;
+      building: string;
+      apartmentNumber: string;
+      isSuper?: boolean;
+    },
   ) {
-    if (req.user.role !== UserRole.ADMIN) {
-      throw new Error('Unauthorized: Only admins can create users');
-    }
     const user = await this.usersService.create({
       email: body.email,
       password: body.password,
@@ -112,7 +114,6 @@ export class AdminController {
       building: body.building,
       apartmentNumber: body.apartmentNumber,
     } as any);
-    // Mark verified and set role
     await this.usersService.updateEmailVerification(user.id, true);
     if (body.isSuper) {
       await this.usersService.updateUserRole(user.id, UserRole.SUPER);

@@ -11,5 +11,3 @@ import { AdminRestrictionsController } from './controllers/admin-restrictions.co
   exports: [RestrictionsService],
 })
 export class RestrictionsModule {}
-
-

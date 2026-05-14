@@ -4,8 +4,10 @@ import { Repository } from 'typeorm';
 import { EmailTemplate } from './email-template.entity';
 
 const DEFAULTS: Record<string, string> = {
-  registration: 'Welcome {{name}},\n\nPlease verify your email to activate your account.',
-  booking_confirmation: 'Hello {{name}},\n\nYour booking for {{amenity}} on {{date}} at {{time}} is confirmed.',
+  registration:
+    'Welcome {{name}},\n\nPlease verify your email to activate your account.',
+  booking_confirmation:
+    'Hello {{name}},\n\nYour booking for {{amenity}} on {{date}} at {{time}} is confirmed.',
   registration_legal_text: 'Legal note - Account creation',
   booking_legal_text: 'Legal note - Booking confirmation',
 };
@@ -32,7 +34,10 @@ export class EmailTemplatesService {
     return null;
   }
 
-  async upsert(key: string, body: string): Promise<{ key: string; body: string }> {
+  async upsert(
+    key: string,
+    body: string,
+  ): Promise<{ key: string; body: string }> {
     const existing = await this.repo.findOne({ where: { key } });
     if (existing) {
       existing.body = body;
@@ -55,5 +60,3 @@ export class EmailTemplatesService {
     }
   }
 }
-
-

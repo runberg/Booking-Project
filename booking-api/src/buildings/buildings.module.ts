@@ -12,5 +12,3 @@ import { AdminBuildingsController } from './controllers/admin-buildings.controll
   exports: [BuildingsService],
 })
 export class BuildingsModule {}
-
-
