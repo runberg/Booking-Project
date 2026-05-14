@@ -150,9 +150,54 @@ docker compose ps
 # Live logs
 docker compose logs -f api
 docker compose logs -f web
+```
 
-# Database backup
+---
+
+### Backup and restore
+
+Everything unique to your installation lives in three places:
+
+| What | Why |
+|---|---|
+| `./data/postgres/` | The entire database — users, bookings, settings, logs, etc. |
+| `docker-compose.yml` | Service configuration |
+| `.env` | Secrets and environment variables |
+
+#### Taking a backup
+
+The recommended way is a live `pg_dump`. This is safe while the system is running and produces a clean SQL file:
+
+```bash
 docker compose exec postgres pg_dump -U booking booking > backup-$(date +%Y%m%d).sql
+```
+
+Store the resulting `.sql` file (plus your `.env`) somewhere safe. That is all you need to fully restore the system on any server.
+
+> **Do not** copy the `./data/postgres/` folder while the database container is running — Postgres may have partially written files, which can result in a corrupt backup. If you want a folder-level copy, stop the container first:
+> ```bash
+> docker compose stop postgres
+> cp -r ./data/postgres ./data/postgres.bak
+> docker compose start postgres
+> ```
+
+#### Restoring from a pg_dump backup
+
+```bash
+# Start a fresh stack (no existing data folder)
+docker compose up -d
+
+# Wait for Postgres to be healthy, then restore
+docker compose exec -T postgres psql -U booking booking < backup-20240101.sql
+```
+
+#### Restoring from a folder-level backup
+
+If you have a cold copy of `./data/postgres/`, place it at `./data/postgres/` before starting the stack — Postgres will pick it up automatically on first start:
+
+```bash
+cp -r /your/backup/postgres ./data/postgres
+docker compose up -d
 ```
 
 ---
