@@ -36,8 +36,10 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Request() req): Promise<AuthResponseDto> {
+    const forwarded = req.headers?.['x-forwarded-for'] as string | undefined;
+    const ip = forwarded?.split(',')[0]?.trim() || req.ip || '';
+    return this.authService.login(loginDto, ip);
   }
 
   @Post('verify-email')

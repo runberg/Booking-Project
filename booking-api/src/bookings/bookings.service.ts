@@ -34,6 +34,7 @@ const SORTABLE_LOG_COLUMNS = new Set([
   'date',
   'startTime',
   'slotLength',
+  'ipAddress',
 ]);
 
 @Injectable()
@@ -57,10 +58,12 @@ export class BookingsService implements OnModuleInit {
     date: string;
     startTime: string;
     slotLength: number;
+    ipAddress?: string;
   }) {
-    const booking = this.bookingsRepo.create(data);
+    const { ipAddress, ...bookingData } = data;
+    const booking = this.bookingsRepo.create(bookingData);
     const saved = await this.bookingsRepo.save(booking);
-    await this.writeLog('create', saved);
+    await this.writeLog('create', saved, ipAddress);
     return saved;
   }
 
@@ -115,14 +118,14 @@ export class BookingsService implements OnModuleInit {
     });
   }
 
-  async deleteIfOwned(id: string, userId: string) {
+  async deleteIfOwned(id: string, userId: string, ipAddress?: string) {
     const b = await this.bookingsRepo.findOne({ where: { id } });
     if (!b || b.userId !== userId) {
       return { affected: 0 };
     }
     const res = await this.bookingsRepo.delete(id);
     if (res.affected) {
-      await this.writeLog('delete', b);
+      await this.writeLog('delete', b, ipAddress);
     }
     return res;
   }
@@ -261,7 +264,7 @@ export class BookingsService implements OnModuleInit {
     });
   }
 
-  private async writeLog(action: 'create' | 'delete', b: Booking) {
+  private async writeLog(action: 'create' | 'delete', b: Booking, ipAddress?: string) {
     const [user, amenity] = await Promise.all([
       this.usersService.findById(b.userId),
       this.amenitiesService.findOne(b.amenityId),
@@ -278,6 +281,7 @@ export class BookingsService implements OnModuleInit {
       userName: user?.name ?? '',
       building: user?.building ?? '',
       apartmentNumber: user?.apartmentNumber ?? '',
+      ipAddress: ipAddress ?? null,
     });
     await this.logsRepo.save(log);
   }
@@ -359,15 +363,16 @@ export class BookingsService implements OnModuleInit {
 
     const headers = [
       'Time',
-      'Action',
-      'Amenity',
-      'Date',
-      'Start',
-      'Length',
+      'Event',
       'User',
       'Email',
       'Building',
       'Apartment',
+      'IP',
+      'Amenity',
+      'Booking date',
+      'Slot start',
+      'Slot length (min)',
     ];
     const lines = [headers.join(',')];
     for (const l of rows) {
@@ -375,14 +380,15 @@ export class BookingsService implements OnModuleInit {
         [
           new Date(l.createdAt).toISOString(),
           l.action,
-          l.amenityName,
-          l.date,
-          l.startTime,
-          String(l.slotLength),
           l.userName,
           l.userEmail,
           l.building,
           l.apartmentNumber,
+          l.ipAddress ?? '',
+          l.amenityName ?? '',
+          l.date ?? '',
+          l.startTime ?? '',
+          l.slotLength != null ? String(l.slotLength) : '',
         ]
           .map((v) => escape(String(v ?? '')))
           .join(','),

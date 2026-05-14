@@ -3,30 +3,34 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('booking_logs')
+@Index(['userEmail', 'createdAt'])
+@Index(['action', 'createdAt'])
 export class BookingLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column('text')
-  action: 'create' | 'delete';
+  action: 'create' | 'delete' | 'login';
 
-  @Column('text')
-  bookingId: string;
+  // Nullable for login events which have no associated booking
+  @Column({ type: 'text', nullable: true })
+  bookingId: string | null;
 
-  @Column('text')
-  amenityName: string;
+  @Column({ type: 'text', nullable: true })
+  amenityName: string | null;
 
-  @Column('text')
-  date: string; // YYYY-MM-DD
+  @Column({ type: 'text', nullable: true })
+  date: string | null; // YYYY-MM-DD
 
-  @Column('text')
-  startTime: string; // HH:mm
+  @Column({ type: 'text', nullable: true })
+  startTime: string | null; // HH:mm
 
-  @Column('integer')
-  slotLength: number;
+  @Column({ type: 'integer', nullable: true })
+  slotLength: number | null;
 
   @Column('text')
   userId: string;
@@ -42,6 +46,9 @@ export class BookingLog {
 
   @Column('text')
   apartmentNumber: string;
+
+  @Column({ type: 'text', nullable: true })
+  ipAddress: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -91,13 +91,34 @@ export const AdminDashboard: React.FC = () => {
   const [newSecurity, setNewSecurity] = useState<{ username: string; password: string }>({ username: '', password: '' });
 
   // Logs state
-  const [logs, setLogs] = useState<Array<{ id: string; action: string; amenityName: string; date: string; startTime: string; slotLength: number; userName: string; building: string; apartmentNumber: string; userEmail: string; createdAt: string }>>([]);
+  type LogEntry = {
+    id: string;
+    action: 'create' | 'delete' | 'login';
+    amenityName: string | null;
+    date: string | null;
+    startTime: string | null;
+    slotLength: number | null;
+    userName: string;
+    building: string;
+    apartmentNumber: string;
+    userEmail: string;
+    ipAddress: string | null;
+    createdAt: string;
+  };
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logsPage, setLogsPage] = useState(1);
-  const [logsPageSize] = useState(20);
+  const [logsPageSize] = useState(25);
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsSortBy, setLogsSortBy] = useState('createdAt');
   const [logsSortDir, setLogsSortDir] = useState<'ASC' | 'DESC'>('DESC');
-  const [logsFilters, setLogsFilters] = useState<{ action?: string; userEmail?: string; userName?: string; amenityName?: string; building?: string; apartmentNumber?: string; date?: string; startTime?: string; slotLength?: string; dateFrom?: string; dateTo?: string }>({});
+  const [logsFilters, setLogsFilters] = useState<{
+    action?: string;
+    userEmail?: string;
+    amenityName?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }>({});
+  const [logsDraftFilters, setLogsDraftFilters] = useState<typeof logsFilters>({});
 
   // Users tab sorting, search, and role info panel
   const [usersSortBy, setUsersSortBy] = useState<'name' | 'email' | 'building' | 'role' | 'isEmailVerified' | 'createdAt'>('createdAt');
@@ -335,20 +356,23 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Logs
-  const fetchLogs = async (overrides?: Partial<{ page: number; pageSize: number; sortBy: string; sortDir: 'ASC' | 'DESC'; q: string }>) => {
+  const fetchLogs = async (overrides?: Partial<{ page: number; sortBy: string; sortDir: 'ASC' | 'DESC'; filters: typeof logsFilters }>) => {
     try {
       const nextPage = overrides?.page ?? logsPage;
-      const nextPageSize = overrides?.pageSize ?? logsPageSize;
       const nextSortBy = overrides?.sortBy ?? logsSortBy;
       const nextSortDir = overrides?.sortDir ?? logsSortDir;
-      const nextQ = overrides?.q ?? (logsFilters as any).q;
+      const nextFilters = overrides?.filters ?? logsFilters;
       const params = new URLSearchParams({
         page: String(nextPage),
-        pageSize: String(nextPageSize),
+        pageSize: String(logsPageSize),
         sortBy: nextSortBy,
         sortDir: nextSortDir,
       });
-      if (nextQ) params.set('q', String(nextQ));
+      if (nextFilters.action) params.set('action', nextFilters.action);
+      if (nextFilters.userEmail) params.set('userEmail', nextFilters.userEmail);
+      if (nextFilters.amenityName) params.set('amenityName', nextFilters.amenityName);
+      if (nextFilters.dateFrom) params.set('dateFrom', nextFilters.dateFrom);
+      if (nextFilters.dateTo) params.set('dateTo', nextFilters.dateTo);
       const res = await fetch(`${API_BASE_URL}/bookings/logs?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
       });
@@ -359,6 +383,27 @@ export const AdminDashboard: React.FC = () => {
     } catch (e: any) {
       setNotification({ type: 'error', message: e.message });
     }
+  };
+
+  const applyLogsFilters = () => {
+    setLogsFilters(logsDraftFilters);
+    setLogsPage(1);
+    fetchLogs({ page: 1, filters: logsDraftFilters });
+  };
+
+  const clearLogsFilters = () => {
+    setLogsDraftFilters({});
+    setLogsFilters({});
+    setLogsPage(1);
+    fetchLogs({ page: 1, filters: {} });
+  };
+
+  const filterByUser = (email: string) => {
+    const f = { ...logsDraftFilters, userEmail: email };
+    setLogsDraftFilters(f);
+    setLogsFilters(f);
+    setLogsPage(1);
+    fetchLogs({ page: 1, filters: f });
   };
 
   const handleLogout = () => {
@@ -1057,79 +1102,179 @@ export const AdminDashboard: React.FC = () => {
           {activeTab === 'logs' && (
             <div>
               <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Logs</h2>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <input
-                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                    placeholder="Search across all log fields..."
-                    value={(logsFilters as any).q || ''}
-                    onChange={(e) => setLogsFilters((s) => ({ ...(s as any), q: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { setLogsPage(1); fetchLogs({ page: 1 }); }
-                    }}
-                  />
-                  <Button variant="secondary" onClick={() => { setLogsPage(1); fetchLogs({ page: 1 }); }} className="w-full sm:w-auto">Search</Button>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Activity Logs</h2>
+
+                {/* Filter bar */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Event type</label>
+                      <select
+                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm bg-white"
+                        value={logsDraftFilters.action || ''}
+                        onChange={(e) => setLogsDraftFilters((s) => ({ ...s, action: e.target.value || undefined }))}
+                      >
+                        <option value="">All events</option>
+                        <option value="login">Login</option>
+                        <option value="create">Booking created</option>
+                        <option value="delete">Booking cancelled</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">User (email)</label>
+                      <input
+                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                        placeholder="Filter by email..."
+                        value={logsDraftFilters.userEmail || ''}
+                        onChange={(e) => setLogsDraftFilters((s) => ({ ...s, userEmail: e.target.value || undefined }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') applyLogsFilters(); }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Amenity</label>
+                      <input
+                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                        placeholder="Filter by amenity..."
+                        value={logsDraftFilters.amenityName || ''}
+                        onChange={(e) => setLogsDraftFilters((s) => ({ ...s, amenityName: e.target.value || undefined }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') applyLogsFilters(); }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
+                        <input
+                          type="date"
+                          className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                          value={logsDraftFilters.dateFrom || ''}
+                          onChange={(e) => setLogsDraftFilters((s) => ({ ...s, dateFrom: e.target.value || undefined }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+                        <input
+                          type="date"
+                          className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                          value={logsDraftFilters.dateTo || ''}
+                          onChange={(e) => setLogsDraftFilters((s) => ({ ...s, dateTo: e.target.value || undefined }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="secondary" onClick={clearLogsFilters}>Clear</Button>
+                    <Button onClick={applyLogsFilters}>Apply filters</Button>
+                  </div>
                 </div>
+
+                {/* Active filter pills */}
+                {Object.values(logsFilters).some(Boolean) && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {logsFilters.action && (
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                        Type: {logsFilters.action}
+                        <button onClick={() => { const f = { ...logsFilters, action: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+                      </span>
+                    )}
+                    {logsFilters.userEmail && (
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                        User: {logsFilters.userEmail}
+                        <button onClick={() => { const f = { ...logsFilters, userEmail: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+                      </span>
+                    )}
+                    {logsFilters.amenityName && (
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                        Amenity: {logsFilters.amenityName}
+                        <button onClick={() => { const f = { ...logsFilters, amenityName: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+                      </span>
+                    )}
+                    {(logsFilters.dateFrom || logsFilters.dateTo) && (
+                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                        Date: {logsFilters.dateFrom || '…'} – {logsFilters.dateTo || '…'}
+                        <button onClick={() => { const f = { ...logsFilters, dateFrom: undefined, dateTo: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gray-50">
                     <tr>
                       {[
                         { key: 'createdAt', label: 'Time' },
-                        { key: 'action', label: 'Action' },
-                        { key: 'amenityName', label: 'Amenity' },
-                        { key: 'date', label: 'Date' },
-                        { key: 'startTime', label: 'Start' },
-                        { key: 'slotLength', label: 'Length' },
+                        { key: 'action', label: 'Event' },
                         { key: 'userName', label: 'User' },
-                        { key: 'userEmail', label: 'Email' },
-                        { key: 'building', label: 'Building' },
-                        { key: 'apartmentNumber', label: 'Apartment' },
+                        { key: null, label: 'IP address' },
+                        { key: 'amenityName', label: 'Amenity' },
+                        { key: 'date', label: 'Booking date' },
+                        { key: 'startTime', label: 'Slot' },
                       ].map((col) => (
                         <th
-                          key={col.key}
-                          className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
+                          key={col.key ?? col.label}
+                          className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide ${col.key ? 'cursor-pointer hover:text-gray-700' : ''}`}
                           onClick={() => {
-                            const nextSortBy = col.key as any;
-                            const nextSortDir = logsSortBy === nextSortBy && logsSortDir === 'ASC' ? 'DESC' : 'ASC';
-                            setLogsSortBy(nextSortBy);
+                            if (!col.key) return;
+                            const nextSortDir = logsSortBy === col.key && logsSortDir === 'ASC' ? 'DESC' : 'ASC';
+                            setLogsSortBy(col.key);
                             setLogsSortDir(nextSortDir);
                             setLogsPage(1);
-                            fetchLogs({ sortBy: nextSortBy, sortDir: nextSortDir, page: 1 });
+                            fetchLogs({ sortBy: col.key, sortDir: nextSortDir, page: 1 });
                           }}
                         >
                           {col.label}
+                          {col.key && logsSortBy === col.key && (
+                            <span className="ml-1">{logsSortDir === 'ASC' ? '↑' : '↓'}</span>
+                          )}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {logs.map((l) => (
-                      <tr key={l.id}>
-                        <td className="px-4 py-2 text-sm text-gray-700">{formatDateTimeDmy(l.createdAt)}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.action}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.amenityName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{formatIsoDateToDmy(l.date)}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.startTime}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.slotLength} min</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.userName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.userEmail}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.building}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{l.apartmentNumber}</td>
-                      </tr>
-                    ))}
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {logs.map((l) => {
+                      const isLogin = l.action === 'login';
+                      const isCreate = l.action === 'create';
+                      const isDelete = l.action === 'delete';
+                      return (
+                        <tr key={l.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{formatDateTimeDmy(l.createdAt)}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {isLogin && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">Login</span>}
+                            {isCreate && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">Booked</span>}
+                            {isDelete && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Cancelled</span>}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <button
+                              className="text-left hover:underline text-gray-900 font-medium"
+                              title={`Filter by ${l.userEmail}`}
+                              onClick={() => filterByUser(l.userEmail)}
+                            >
+                              {l.userName}
+                            </button>
+                            <div className="text-xs text-gray-500">{l.building}{l.apartmentNumber ? ` / ${l.apartmentNumber}` : ''}</div>
+                          </td>
+                          <td className="px-4 py-2 text-gray-500 whitespace-nowrap font-mono text-xs">{l.ipAddress || '—'}</td>
+                          <td className="px-4 py-2 text-gray-700">{l.amenityName || '—'}</td>
+                          <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{l.date ? formatIsoDateToDmy(l.date) : '—'}</td>
+                          <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{l.startTime ? `${l.startTime} (${l.slotLength} min)` : '—'}</td>
+                        </tr>
+                      );
+                    })}
                     {logs.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="px-4 py-6 text-center text-sm text-gray-600">No logs found.</td>
+                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No log entries found.</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
+
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-                  <div className="text-sm text-gray-600">Page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsPageSize))}</div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600">
+                    {logsTotal} {logsTotal === 1 ? 'entry' : 'entries'} — page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsPageSize))}
+                  </span>
                   <div className="flex space-x-2">
                     <Button variant="secondary" onClick={() => { if (logsPage > 1) { const p = logsPage - 1; setLogsPage(p); fetchLogs({ page: p }); }}}>Prev</Button>
                     <Button variant="secondary" onClick={() => { const max = Math.max(1, Math.ceil(logsTotal / logsPageSize)); if (logsPage < max) { const p = logsPage + 1; setLogsPage(p); fetchLogs({ page: p }); }}}>Next</Button>
@@ -1137,10 +1282,12 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <Button variant="secondary" onClick={async () => {
                   try {
-                    const params = new URLSearchParams();
-                    if ((logsFilters as any).q) params.set('q', String((logsFilters as any).q));
-                    params.set('sortBy', logsSortBy);
-                    params.set('sortDir', logsSortDir);
+                    const params = new URLSearchParams({ sortBy: logsSortBy, sortDir: logsSortDir });
+                    if (logsFilters.action) params.set('action', logsFilters.action);
+                    if (logsFilters.userEmail) params.set('userEmail', logsFilters.userEmail);
+                    if (logsFilters.amenityName) params.set('amenityName', logsFilters.amenityName);
+                    if (logsFilters.dateFrom) params.set('dateFrom', logsFilters.dateFrom);
+                    if (logsFilters.dateTo) params.set('dateTo', logsFilters.dateTo);
                     const res = await fetch(`${API_BASE_URL}/bookings/logs/export?${params.toString()}`, {
                       headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
                     });
@@ -1150,7 +1297,7 @@ export const AdminDashboard: React.FC = () => {
                     const link = document.createElement('a');
                     const dlUrl = URL.createObjectURL(blob);
                     link.href = dlUrl;
-                    link.download = 'booking-logs.csv';
+                    link.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);

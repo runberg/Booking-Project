@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
@@ -17,6 +19,7 @@ import {
 } from './dto/auth.dto';
 import { AuthResponseDto } from './dto/response.dto';
 import { User } from '../users/user.entity';
+import { BookingLog } from '../bookings/booking-log.entity';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -26,6 +29,8 @@ export class AuthService {
     private emailService: EmailService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    @InjectRepository(BookingLog)
+    private logsRepo: Repository<BookingLog>,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<{ message: string }> {
@@ -57,7 +62,7 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+  async login(loginDto: LoginDto, ipAddress?: string): Promise<AuthResponseDto> {
     const lookupEmail = loginDto.email.includes('@')
       ? loginDto.email
       : `${loginDto.email}@security.local`;
@@ -82,6 +87,23 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(user);
+
+    this.logsRepo.save(
+      this.logsRepo.create({
+        action: 'login',
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        building: user.building ?? '',
+        apartmentNumber: user.apartmentNumber ?? '',
+        ipAddress: ipAddress ?? null,
+        bookingId: null,
+        amenityName: null,
+        date: null,
+        startTime: null,
+        slotLength: null,
+      }),
+    ).catch(() => {});
 
     return {
       user: this.sanitizeUser(user),

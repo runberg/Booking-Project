@@ -142,6 +142,7 @@ export class BookingsController {
     @Request() req,
   ) {
     const userId = req.user.id;
+    const ipAddress = extractIp(req);
 
     const latest = await this.bookingsService.findLatestForUser(userId);
     if (latest) {
@@ -193,7 +194,7 @@ export class BookingsController {
       }
     }
 
-    const booking = await this.bookingsService.create({ userId, ...body });
+    const booking = await this.bookingsService.create({ userId, ipAddress, ...body });
 
     (async () => {
       try {
@@ -231,10 +232,15 @@ export class BookingsController {
 
   @Delete(':id')
   async deleteMine(@Param('id') id: string, @Request() req) {
-    const res = await this.bookingsService.deleteIfOwned(id, req.user.id);
+    const res = await this.bookingsService.deleteIfOwned(id, req.user.id, extractIp(req));
     if (res.affected === 0) {
       throw new ForbiddenException('Booking not found or not owned by you');
     }
     return { message: 'Booking deleted' };
   }
+}
+
+function extractIp(req: any): string {
+  const forwarded = req.headers?.['x-forwarded-for'] as string | undefined;
+  return forwarded?.split(',')[0]?.trim() || req.ip || '';
 }
