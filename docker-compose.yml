@@ -1,4 +1,19 @@
 services:
+
+  traefik-ready:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        for i in $(seq 1 ${TRAEFIK_PING_RETRIES:-10}); do
+          curl -fsS ${TRAEFIK_PING_URL:-http://traefik:8080/ping} && exit 0
+          echo 'waiting for Traefik...'; sleep ${TRAEFIK_PING_DELAY_SECONDS:-3};
+        done;
+        exit 1
+      "
+    restart: "no"
+    networks:
+      - traefik-proxy
+
   postgres:
     image: postgres:16-alpine
     container_name: booking-db
@@ -6,8 +21,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-booking}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-booking}
-    ports:
-      - "5432:5432"           # Exposed so local dev can connect
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     restart: unless-stopped
@@ -16,6 +29,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
 
   api:
     image: ghcr.io/runberg/booking-project/api:latest
@@ -25,8 +40,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-booking}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-booking}
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       TZ: ${TZ:-UTC}
@@ -45,16 +60,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - internal
 
   web:
     image: ghcr.io/runberg/booking-project/frontend:latest
     container_name: booking-web
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/certs:/etc/nginx/certs:ro   # only needed when HTTPS is enabled
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-proxy
+      - traefik.http.routers.booking.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.booking.entrypoints=websecure
+      - traefik.http.routers.booking.tls.certresolver=le
+      - traefik.http.services.booking.loadbalancer.server.port=80
     depends_on:
+      traefik-ready:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - traefik-proxy
+      - internal
+
+networks:
+  traefik-proxy:
+    external: true
+  internal:
+    driver: bridge
