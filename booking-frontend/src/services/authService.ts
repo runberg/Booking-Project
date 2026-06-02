@@ -45,8 +45,20 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If unauthorized and we haven't retried yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // If unauthorized and we haven't retried yet.
+    // Skip refresh logic for auth endpoints — a 401 from /auth/login means wrong
+    // credentials, not an expired session. Intercepting it would set the
+    // sessionExpired flag and show a misleading "session expired" message.
+    const requestUrl: string = originalRequest.url || '';
+    const isAuthEndpoint =
+      requestUrl.includes('/auth/login') ||
+      requestUrl.includes('/auth/register') ||
+      requestUrl.includes('/auth/refresh') ||
+      requestUrl.includes('/auth/verify-email') ||
+      requestUrl.includes('/auth/forgot-password') ||
+      requestUrl.includes('/auth/reset-password');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       if (isRefreshing) {
