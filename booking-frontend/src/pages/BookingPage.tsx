@@ -344,7 +344,7 @@ export const BookingPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
               <span className="text-xs sm:text-sm text-gray-600 truncate">Welcome, {currentUser?.name}</span>
               <div className="flex gap-2">
-                {currentUser?.role === 'admin' && (
+                {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
                   <Button onClick={() => navigate('/admin')} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Admin</Button>
                 )}
                 <Button variant="secondary" onClick={handleLogout} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Logout</Button>

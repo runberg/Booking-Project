@@ -188,11 +188,11 @@ export const AdminDashboard: React.FC = () => {
   const checkSetup = async () => {
     try {
       const [smtpRes, amenitiesRes] = await Promise.all([
-        api.get('/admin/settings/smtp').catch(() => null),
+        isAdmin ? api.get('/admin/settings/smtp').catch(() => null) : Promise.resolve(null),
         api.get('/amenities').catch(() => null),
       ]);
       const smtp = smtpRes?.data;
-      const smtpMissing = !smtp?.smtp_host || !smtp?.smtp_pass_set;
+      const smtpMissing = isAdmin && (!smtp?.smtp_host || !smtp?.smtp_pass_set);
       const amenitiesMissing = !amenitiesRes?.data?.length;
       setSetupWarnings({ smtp: smtpMissing, amenities: amenitiesMissing });
     } catch {}
@@ -202,7 +202,7 @@ export const AdminDashboard: React.FC = () => {
     if (activeTab === 'buildings') fetchBuildings();
     if (activeTab === 'logs') fetchLogs();
     if (activeTab === 'emails') fetchEmailTemplates();
-    if (activeTab === 'settings') fetchSmtpSettings();
+    if (activeTab === 'settings' && isAdmin) fetchSmtpSettings();
   }, [activeTab]);
 
   const fetchUsers = async () => {
@@ -412,6 +412,8 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const currentUser = authService.getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const isSuper = currentUser?.role === 'super';
 
   const tabs: Array<{ key: typeof activeTab; label: string }> = [
     { key: 'users', label: 'Users' },
@@ -419,7 +421,7 @@ export const AdminDashboard: React.FC = () => {
     { key: 'logs', label: 'Logs' },
     { key: 'amenities', label: 'Amenities' },
     { key: 'emails', label: 'Content' },
-    { key: 'settings', label: 'Settings' },
+    ...(isAdmin ? [{ key: 'settings' as typeof activeTab, label: 'Settings' }] : []),
   ];
 
   return (
@@ -564,11 +566,11 @@ export const AdminDashboard: React.FC = () => {
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900">All Users</h2>
                 <div className="flex items-center space-x-3">
                   <span className="text-xs sm:text-sm text-gray-600">{users.length} users</span>
-                  {currentUser?.role === 'admin' && (
-                    <>
-                      <Button variant="secondary" onClick={() => setCreateSuperOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Super User</Button>
-                      <Button variant="secondary" onClick={() => setCreateSecurityOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Security User</Button>
-                    </>
+                  {isAdmin && (
+                    <Button variant="secondary" onClick={() => setCreateSuperOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Super User</Button>
+                  )}
+                  {(isAdmin || isSuper) && (
+                    <Button variant="secondary" onClick={() => setCreateSecurityOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Security User</Button>
                   )}
                 </div>
               </div>
@@ -1020,7 +1022,7 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* Settings tab */}
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && isAdmin && (
             <div>
               <div className="mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Settings</h2>

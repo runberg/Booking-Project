@@ -82,7 +82,7 @@ export class AdminController {
   }
 
   @Post('users/:id/role')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async changeUserRole(
     @Param('id') id: string,
     @Body() body: { role: UserRole },
@@ -95,7 +95,7 @@ export class AdminController {
   }
 
   @Post('users')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async createUser(
     @Body()
     body: {
@@ -111,6 +111,7 @@ export class AdminController {
       // shared
       password: string;
     },
+    @Request() req,
   ) {
     let email: string;
     let name: string;
@@ -119,6 +120,10 @@ export class AdminController {
 
     if (!body.password || body.password.length < 8 || body.password.length > 128) {
       throw new BadRequestException('Password must be between 8 and 128 characters');
+    }
+
+    if (body.isSuper && req.user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only admins can create super users');
     }
 
     if (body.isSecurity) {

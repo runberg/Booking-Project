@@ -52,13 +52,13 @@ export class BookingsController {
 
   @Get('upcoming')
   @SkipThrottle()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async listUpcoming() {
     return this.bookingsService.listUpcoming(10);
   }
 
   @Get('logs')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async listLogs(
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '20',
@@ -98,7 +98,7 @@ export class BookingsController {
   }
 
   @Get('logs/export')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async exportLogs(
     @Query('sortBy') sortBy?: string,
     @Query('sortDir') sortDir?: 'ASC' | 'DESC',
