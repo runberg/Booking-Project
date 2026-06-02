@@ -123,8 +123,9 @@ api.interceptors.response.use(
         isRefreshing = false;
       }
     }
-    // Unauthenticated without retry scenario
-    if (error.response?.status === 401) {
+    // For non-auth endpoints, a 401 that wasn't handled above (e.g. after a
+    // failed retry) means the session is truly gone — clear state and redirect.
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       try {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
