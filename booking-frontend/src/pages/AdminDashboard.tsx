@@ -84,6 +84,7 @@ export const AdminDashboard: React.FC = () => {
   const [smtpPass, setSmtpPass] = useState('');
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
 
   const [createSuperOpen, setCreateSuperOpen] = useState(false);
   const [newSuper, setNewSuper] = useState<{ name: string; email: string; password: string; building: string; apartmentNumber: string }>({ name: '', email: '', password: '', building: '', apartmentNumber: '' });
@@ -1243,20 +1244,24 @@ export const AdminDashboard: React.FC = () => {
                     <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
                       <Button
                         variant="secondary"
+                        disabled={isTestingSmtp}
                         onClick={async () => {
+                          setIsTestingSmtp(true);
                           try {
                             const { data } = await api.post('/admin/settings/smtp/test');
                             if (data.ok) {
-                              setNotification({ type: 'success', message: 'Test email sent successfully to your account.' });
+                              setNotification({ type: 'success', message: 'Test email sent — check your inbox.' });
                             } else {
                               setNotification({ type: 'error', message: `SMTP error: ${data.error || 'Unknown error'}` });
                             }
                           } catch (e: any) {
-                            setNotification({ type: 'error', message: e.response?.data?.message || 'Test failed' });
+                            setNotification({ type: 'error', message: e.response?.data?.message || 'Test request failed' });
+                          } finally {
+                            setIsTestingSmtp(false);
                           }
                         }}
                       >
-                        Send test email
+                        {isTestingSmtp ? 'Sending…' : 'Send test email'}
                       </Button>
                       <Button onClick={saveSmtpSettings} disabled={isSavingSettings}>
                         {isSavingSettings ? 'Saving...' : 'Save Settings'}
