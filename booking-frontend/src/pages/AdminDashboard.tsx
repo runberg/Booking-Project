@@ -136,12 +136,17 @@ export const AdminDashboard: React.FC = () => {
   // Email templates state
   const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; subject: string | null; body: string }>>([]);
   const [isLoadingEmails, setIsLoadingEmails] = useState(false);
+  const [reminderHoursBefore, setReminderHoursBefore] = useState('24');
 
   const fetchEmailTemplates = async () => {
     try {
       setIsLoadingEmails(true);
-      const { data } = await api.get('/admin/email-templates');
-      setEmailTemplates(data || []);
+      const [{ data: templates }, { data: reminder }] = await Promise.all([
+        api.get('/admin/email-templates'),
+        api.get('/admin/settings/reminder').catch(() => ({ data: { reminder_hours_before: '24' } })),
+      ]);
+      setEmailTemplates(templates || []);
+      setReminderHoursBefore(reminder?.reminder_hours_before ?? '24');
     } catch (e: any) {
       setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to load email templates' });
     } finally {
@@ -1065,6 +1070,35 @@ export const AdminDashboard: React.FC = () => {
                       <Card key={key}>
                         <h3 className="text-base font-medium text-gray-900 mb-1">{title}</h3>
                         <p className="text-sm text-gray-600 mb-4">{description}</p>
+
+                        {/* Reminder timing — only for booking_reminder */}
+                        {key === 'booking_reminder' && (
+                          <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                            <label className="text-sm font-medium text-amber-900 whitespace-nowrap">Send reminder</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={168}
+                              className="w-20 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center"
+                              value={reminderHoursBefore}
+                              onChange={(e) => setReminderHoursBefore(e.target.value)}
+                            />
+                            <span className="text-sm text-amber-900">hours before the booking</span>
+                            <button
+                              className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+                              onClick={async () => {
+                                try {
+                                  await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore });
+                                  setNotification({ type: 'success', message: 'Reminder timing saved' });
+                                } catch (e: any) {
+                                  setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
+                                }
+                              }}
+                            >
+                              Save timing
+                            </button>
+                          </div>
+                        )}
 
                         {/* Subject line */}
                         <div className="mb-4">

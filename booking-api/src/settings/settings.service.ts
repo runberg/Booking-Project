@@ -10,6 +10,7 @@ const ALLOWED_KEYS = new Set([
   'smtp_user',
   'smtp_pass',
   'smtp_from',
+  'reminder_hours_before',
 ]);
 
 @Injectable()
@@ -29,6 +30,7 @@ export class SettingsService implements OnModuleInit {
       smtp_user: this.configService.get('SMTP_USER', ''),
       smtp_pass: this.configService.get('SMTP_PASS', ''),
       smtp_from: this.configService.get('SMTP_FROM', ''),
+      reminder_hours_before: this.configService.get('REMINDER_HOURS_BEFORE', '24'),
     };
     for (const [key, value] of Object.entries(defaults)) {
       const existing = await this.repo.findOne({ where: { key } });

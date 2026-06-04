@@ -7,16 +7,17 @@ import { UserRole } from '../users/user.entity';
 
 @Controller('admin/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
 export class SettingsController {
   constructor(private settingsService: SettingsService) {}
 
   @Get('smtp')
+  @Roles(UserRole.ADMIN)
   async getSmtp() {
     return this.settingsService.getSmtpSettings();
   }
 
   @Put('smtp')
+  @Roles(UserRole.ADMIN)
   async updateSmtp(
     @Body()
     body: {
@@ -34,5 +35,26 @@ export class SettingsController {
       }
     }
     return this.settingsService.getSmtpSettings();
+  }
+
+  @Get('reminder')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async getReminder() {
+    const hours = await this.settingsService.get('reminder_hours_before');
+    return { reminder_hours_before: hours ?? '24' };
+  }
+
+  @Put('reminder')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async updateReminder(@Body() body: { reminder_hours_before?: string }) {
+    if (body.reminder_hours_before !== undefined) {
+      const val = parseInt(body.reminder_hours_before, 10);
+      if (isNaN(val) || val < 1 || val > 168) {
+        return { reminder_hours_before: await this.settingsService.get('reminder_hours_before') ?? '24' };
+      }
+      await this.settingsService.set('reminder_hours_before', String(val));
+    }
+    const hours = await this.settingsService.get('reminder_hours_before');
+    return { reminder_hours_before: hours ?? '24' };
   }
 }

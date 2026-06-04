@@ -4,6 +4,7 @@ import { BookingsService } from '../bookings/bookings.service';
 import { AmenitiesService } from '../amenities/amenities.service';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../email/email.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class RemindersService implements OnModuleInit {
@@ -15,6 +16,7 @@ export class RemindersService implements OnModuleInit {
     private usersService: UsersService,
     private emailService: EmailService,
     private configService: ConfigService,
+    private settingsService: SettingsService,
   ) {}
 
   onModuleInit() {
@@ -30,7 +32,8 @@ export class RemindersService implements OnModuleInit {
 
   private async runCheck() {
     try {
-      const hoursBefore = Number(this.configService.get('REMINDER_HOURS_BEFORE', '24'));
+      const hoursRaw = await this.settingsService.get('reminder_hours_before');
+      const hoursBefore = Number(hoursRaw ?? this.configService.get('REMINDER_HOURS_BEFORE', '24'));
       const now = new Date();
       const windowEndMs = now.getTime() + hoursBefore * 3_600_000;
       const minCreatedAtMs = now.getTime() - hoursBefore * 3_600_000;
