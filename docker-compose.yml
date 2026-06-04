@@ -62,6 +62,8 @@ services:
   web:
     image: ghcr.io/runberg/booking-project/frontend:latest
     container_name: booking-web
+    environment:
+      TZ: ${TZ:-UTC}
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik-proxy

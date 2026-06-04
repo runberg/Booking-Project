@@ -10,11 +10,12 @@ export function setServerTimezone(tz: string): void {
 }
 
 function getTimezone(): string {
-  try {
-    return localStorage.getItem('serverTimezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  }
+  // Primary: injected synchronously by the container at startup into env.js
+  const injected = (window as any).__SERVER_TZ__;
+  if (injected) return injected as string;
+  // Fallback: saved to localStorage by the async fetch in App.tsx
+  try { return localStorage.getItem('serverTimezone') || 'UTC'; }
+  catch { return 'UTC'; }
 }
 
 export function formatIsoDateToDmy(isoDate: string): string {
