@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, SelectQueryBuilder, IsNull } from 'typeorm';
 import { Booking } from './booking.entity';
 import { BookingCancelToken } from './booking-cancel-token.entity';
+import { BookingCheckinToken } from './booking-checkin-token.entity';
 import { AmenitiesService } from '../amenities/amenities.service';
 import { UsersService } from '../users/users.service';
 import { BookingLog } from './booking-log.entity';
@@ -45,6 +46,8 @@ export class BookingsService implements OnModuleInit {
     private bookingsRepo: Repository<Booking>,
     @InjectRepository(BookingCancelToken)
     private cancelTokenRepo: Repository<BookingCancelToken>,
+    @InjectRepository(BookingCheckinToken)
+    private checkinTokenRepo: Repository<BookingCheckinToken>,
     private amenitiesService: AmenitiesService,
     private usersService: UsersService,
     @InjectRepository(BookingLog)
@@ -343,6 +346,82 @@ export class BookingsService implements OnModuleInit {
     await this.writeLog('delete', booking);
 
     return { ok: true, message: 'Your booking has been cancelled.' };
+  }
+
+  // ── Check-in helpers ─────────────────────────────────────────────────────
+
+  async findUnsentCheckinEmails(): Promise<Booking[]> {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    return this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.checkinEmailSentAt IS NULL')
+      .andWhere('b.date >= :today', { today: todayStr })
+      .getMany();
+  }
+
+  async markCheckinEmailSent(bookingId: string): Promise<void> {
+    await this.bookingsRepo.update(bookingId, { checkinEmailSentAt: new Date() });
+  }
+
+  async createCheckinToken(bookingId: string, expiresAt: Date): Promise<string> {
+    const { randomBytes } = await import('crypto');
+    const token = randomBytes(32).toString('hex');
+    await this.checkinTokenRepo.save(
+      this.checkinTokenRepo.create({ bookingId, token, expiresAt }),
+    );
+    return token;
+  }
+
+  async previewCheckinToken(token: string): Promise<{
+    amenityName: string;
+    date: string;
+    startTime: string;
+    slotLength: number;
+    userName: string;
+  } | null> {
+    const checkinToken = await this.checkinTokenRepo.findOne({
+      where: { token, usedAt: IsNull() },
+    });
+    if (!checkinToken || checkinToken.expiresAt < new Date()) return null;
+
+    const booking = await this.bookingsRepo.findOne({ where: { id: checkinToken.bookingId } });
+    if (!booking) return null;
+
+    const [user, amenity] = await Promise.all([
+      this.usersService.findById(booking.userId),
+      this.amenitiesService.findOne(booking.amenityId),
+    ]);
+
+    return {
+      amenityName: amenity?.name ?? 'Amenity',
+      date: booking.date,
+      startTime: booking.startTime,
+      slotLength: booking.slotLength,
+      userName: user?.name ?? '',
+    };
+  }
+
+  async checkinByToken(token: string, qrToken: string): Promise<{ ok: boolean; message: string }> {
+    const checkinToken = await this.checkinTokenRepo.findOne({
+      where: { token, usedAt: IsNull() },
+    });
+    if (!checkinToken) return { ok: false, message: 'Invalid or expired check-in link.' };
+    if (checkinToken.expiresAt < new Date()) return { ok: false, message: 'This check-in link has expired.' };
+
+    const booking = await this.bookingsRepo.findOne({ where: { id: checkinToken.bookingId } });
+    if (!booking) return { ok: false, message: 'Booking not found.' };
+
+    const amenity = await this.amenitiesService.findOne(booking.amenityId);
+    if (!amenity?.qrToken || amenity.qrToken !== qrToken) {
+      return { ok: false, message: 'QR code does not match the booked amenity. Please make sure you are at the correct location.' };
+    }
+
+    await this.bookingsRepo.update(booking.id, { checkedInAt: new Date() });
+    await this.checkinTokenRepo.update(checkinToken.id, { usedAt: new Date() });
+
+    return { ok: true, message: 'Check-in successful!' };
   }
 
   private async writeLog(action: 'create' | 'delete', b: Booking, ipAddress?: string) {

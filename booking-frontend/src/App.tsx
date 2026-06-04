@@ -7,7 +7,8 @@ import { BookingPage } from './pages/BookingPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { SecurityPage } from './pages/SecurityPage';
-import { CancelBookingPage } from './pages/CancelBookingPage';
+const CancelBookingPage = React.lazy(() => import('./pages/CancelBookingPage').then(m => ({ default: m.CancelBookingPage })));
+const CheckinPage = React.lazy(() => import('./pages/CheckinPage').then(m => ({ default: m.CheckinPage })));
 import { authService } from './services/authService';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -27,6 +28,7 @@ function App() {
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="App">
+        <React.Suspense fallback={null}>
         <Routes>
           <Route path="/" element={
             (() => {
@@ -93,7 +95,12 @@ function App() {
             path="/cancel/:token"
             element={<CancelBookingPage />}
           />
+          <Route
+            path="/checkin/:token"
+            element={<CheckinPage />}
+          />
         </Routes>
+        </React.Suspense>
       </div>
     </Router>
   );

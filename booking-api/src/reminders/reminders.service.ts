@@ -26,7 +26,11 @@ export class RemindersService implements OnModuleInit {
     // Short startup delay so DB connections are ready
     setTimeout(() => {
       this.runCheck();
-      setInterval(() => this.runCheck(), intervalMs);
+      this.runCheckinCheck();
+      setInterval(() => {
+        this.runCheck();
+        this.runCheckinCheck();
+      }, intervalMs);
     }, 20_000);
   }
 
@@ -54,6 +58,61 @@ export class RemindersService implements OnModuleInit {
       }
     } catch (e) {
       this.logger.error('Reminder check failed', e);
+    }
+  }
+
+  private async runCheckinCheck() {
+    try {
+      const minutesRaw = await this.settingsService.get('checkin_minutes_before');
+      const minutesBefore = Number(minutesRaw ?? this.configService.get('CHECKIN_MINUTES_BEFORE', '30'));
+      const now = new Date();
+      const windowEndMs = now.getTime() + minutesBefore * 60_000;
+
+      const candidates = await this.bookingsService.findUnsentCheckinEmails();
+
+      for (const booking of candidates) {
+        const bookingDateTime = new Date(`${booking.date}T${booking.startTime}:00`);
+        const bookingMs = bookingDateTime.getTime();
+        if (bookingMs > now.getTime() && bookingMs <= windowEndMs) {
+          await this.sendCheckinEmail(booking, bookingDateTime);
+        }
+      }
+    } catch (e) {
+      this.logger.error('Check-in email check failed', e);
+    }
+  }
+
+  private async sendCheckinEmail(booking: any, bookingDateTime: Date) {
+    const [user, amenity] = await Promise.all([
+      this.usersService.findById(booking.userId),
+      this.amenitiesService.findOne(booking.amenityId),
+    ]);
+    if (!user || !amenity) return;
+
+    // Token expires 1 hour after creation
+    const expiresAt = new Date(Date.now() + 3_600_000);
+    const token = await this.bookingsService.createCheckinToken(booking.id, expiresAt);
+
+    const frontendUrl = this.configService.get('FRONTEND_URL', '');
+    const checkinUrl = `${frontendUrl}/checkin/${token}`;
+
+    try {
+      await this.emailService.sendTemplateEmail(
+        user.email,
+        'Time to check in',
+        'booking_checkin',
+        {
+          name: user.name,
+          amenity: amenity.name,
+          date: booking.date,
+          time: booking.startTime,
+          checkinUrl,
+        },
+      );
+      await this.bookingsService.markCheckinEmailSent(booking.id);
+      this.logger.log(`Check-in email sent to ${user.email} for booking ${booking.id}`);
+    } catch (e) {
+      this.logger.error(`Failed to send check-in email for booking ${booking.id}`, e);
     }
   }
 

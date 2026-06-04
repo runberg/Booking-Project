@@ -18,6 +18,10 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
     subject: 'Reminder: Your upcoming booking for {{amenity}}',
     body: '<p>Hello {{name}},</p><p>This is a reminder that you have an upcoming booking:</p><p><strong>{{amenity}}</strong><br>{{date}} at {{time}}</p><div style="text-align:center;margin:24px 0"><a href="{{cancelUrl}}" style="background-color:#dc3545;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;">Cancel Booking</a></div><p style="text-align:center;font-size:12px;color:#666">Or copy this link into your browser:<br>{{cancelUrl}}</p><p>If you plan to attend, no action is needed.</p>',
   },
+  booking_checkin: {
+    subject: 'Time to check in: {{amenity}}',
+    body: '<p>Hello {{name}},</p><p>Your booking for <strong>{{amenity}}</strong> starts at <strong>{{time}}</strong> today. Please check in by scanning the QR code at the amenity.</p><div style="text-align:center;margin:24px 0"><a href="{{checkinUrl}}" style="background-color:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Check In Now</a></div><p style="text-align:center;font-size:12px;color:#666">Or copy this link:<br>{{checkinUrl}}</p>',
+  },
   registration_legal_text: {
     subject: '',
     body: 'Legal note - Account creation',
@@ -25,6 +29,18 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
   booking_legal_text: {
     subject: '',
     body: 'Legal note - Booking confirmation',
+  },
+  checkin_page_instructions: {
+    subject: '',
+    body: 'Point your camera at the QR code posted at the amenity to confirm your attendance.',
+  },
+  checkin_success_text: {
+    subject: '',
+    body: 'You have successfully checked in. Enjoy your booking!',
+  },
+  checkin_mismatch_text: {
+    subject: '',
+    body: 'The QR code does not match your booked amenity. Please make sure you are at the correct location and try again.',
   },
 };
 

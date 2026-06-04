@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomBytes } from 'crypto';
 import { Amenity } from './amenity.entity';
 import { BookingRestriction } from '../restrictions/booking-restriction.entity';
 
@@ -63,6 +64,7 @@ export class AmenitiesService {
       slotLength: data.slotLength ?? 60,
       isActive: data.isActive ?? true,
       bookingRestrictionId: data.bookingRestrictionId,
+      qrToken: randomBytes(16).toString('hex'),
     });
     return this.amenitiesRepository.save(amenity);
   }
@@ -89,5 +91,12 @@ export class AmenitiesService {
 
   async remove(id: string): Promise<void> {
     await this.amenitiesRepository.delete(id);
+  }
+
+  async regenerateQrToken(id: string): Promise<Amenity> {
+    const amenity = await this.amenitiesRepository.findOne({ where: { id } });
+    if (!amenity) throw new NotFoundException('Amenity not found');
+    amenity.qrToken = randomBytes(16).toString('hex');
+    return this.amenitiesRepository.save(amenity);
   }
 }

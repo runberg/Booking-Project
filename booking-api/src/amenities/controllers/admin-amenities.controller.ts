@@ -59,6 +59,11 @@ export class AdminAmenitiesController {
     return this.amenitiesService.update(id, body);
   }
 
+  @Post(':id/qr/regenerate')
+  async regenerateQr(@Param('id') id: string) {
+    return this.amenitiesService.regenerateQrToken(id);
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string) {
     await this.amenitiesService.remove(id);

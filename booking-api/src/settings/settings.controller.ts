@@ -40,21 +40,32 @@ export class SettingsController {
   @Get('reminder')
   @Roles(UserRole.ADMIN, UserRole.SUPER)
   async getReminder() {
-    const hours = await this.settingsService.get('reminder_hours_before');
-    return { reminder_hours_before: hours ?? '24' };
+    const [hours, minutes] = await Promise.all([
+      this.settingsService.get('reminder_hours_before'),
+      this.settingsService.get('checkin_minutes_before'),
+    ]);
+    return { reminder_hours_before: hours ?? '24', checkin_minutes_before: minutes ?? '30' };
   }
 
   @Put('reminder')
   @Roles(UserRole.ADMIN, UserRole.SUPER)
-  async updateReminder(@Body() body: { reminder_hours_before?: string }) {
+  async updateReminder(@Body() body: { reminder_hours_before?: string; checkin_minutes_before?: string }) {
     if (body.reminder_hours_before !== undefined) {
       const val = parseInt(body.reminder_hours_before, 10);
-      if (isNaN(val) || val < 1 || val > 168) {
-        return { reminder_hours_before: await this.settingsService.get('reminder_hours_before') ?? '24' };
+      if (!isNaN(val) && val >= 1 && val <= 168) {
+        await this.settingsService.set('reminder_hours_before', String(val));
       }
-      await this.settingsService.set('reminder_hours_before', String(val));
     }
-    const hours = await this.settingsService.get('reminder_hours_before');
-    return { reminder_hours_before: hours ?? '24' };
+    if (body.checkin_minutes_before !== undefined) {
+      const val = parseInt(body.checkin_minutes_before, 10);
+      if (!isNaN(val) && val >= 0 && val <= 120) {
+        await this.settingsService.set('checkin_minutes_before', String(val));
+      }
+    }
+    const [hours, minutes] = await Promise.all([
+      this.settingsService.get('reminder_hours_before'),
+      this.settingsService.get('checkin_minutes_before'),
+    ]);
+    return { reminder_hours_before: hours ?? '24', checkin_minutes_before: minutes ?? '30' };
   }
 }

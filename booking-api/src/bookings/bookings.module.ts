@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Booking } from './booking.entity';
 import { BookingLog } from './booking-log.entity';
 import { BookingCancelToken } from './booking-cancel-token.entity';
+import { BookingCheckinToken } from './booking-checkin-token.entity';
 import { BookingsService } from './bookings.service';
 import { BookingsController } from './bookings.controller';
 import { BookingsPublicController } from './bookings-public.controller';
@@ -15,7 +16,7 @@ import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Booking, BookingLog, BookingCancelToken]),
+    TypeOrmModule.forFeature([Booking, BookingLog, BookingCancelToken, BookingCheckinToken]),
     EmailModule,
     AmenitiesModule,
     RestrictionsModule,

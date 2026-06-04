@@ -139,6 +139,7 @@ export const AdminDashboard: React.FC = () => {
   const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; subject: string | null; body: string }>>([]);
   const [isLoadingEmails, setIsLoadingEmails] = useState(false);
   const [reminderHoursBefore, setReminderHoursBefore] = useState('24');
+  const [checkinMinutesBefore, setCheckinMinutesBefore] = useState('30');
 
   const fetchEmailTemplates = async () => {
     try {
@@ -149,6 +150,7 @@ export const AdminDashboard: React.FC = () => {
       ]);
       setEmailTemplates(templates || []);
       setReminderHoursBefore(reminder?.reminder_hours_before ?? '24');
+      setCheckinMinutesBefore(reminder?.checkin_minutes_before ?? '30');
     } catch (e: any) {
       setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to load email templates' });
     } finally {
@@ -968,6 +970,24 @@ export const AdminDashboard: React.FC = () => {
                         description: 'Shown above the "Confirm booking" button when confirming a booking.',
                         defaultBody: 'Legal note - Booking confirmation',
                       },
+                      {
+                        key: 'checkin_page_instructions',
+                        title: 'Check-in page — instructions',
+                        description: 'Shown on the check-in page before the user scans the QR code.',
+                        defaultBody: 'Point your camera at the QR code posted at the amenity to confirm your attendance.',
+                      },
+                      {
+                        key: 'checkin_success_text',
+                        title: 'Check-in page — success message',
+                        description: 'Shown after a successful QR scan.',
+                        defaultBody: 'You have successfully checked in. Enjoy your booking!',
+                      },
+                      {
+                        key: 'checkin_mismatch_text',
+                        title: 'Check-in page — mismatch message',
+                        description: 'Shown when the scanned QR code does not match the booked amenity.',
+                        defaultBody: 'The QR code does not match your booked amenity. Please make sure you are at the correct location.',
+                      },
                     ].map(({ key, title, description, defaultBody }) => (
                       <div key={key}>
                         <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
@@ -1033,6 +1053,18 @@ export const AdminDashboard: React.FC = () => {
                         { tag: '{{cancelUrl}}', desc: 'One-click cancel link (no login required)' },
                       ],
                     },
+                    {
+                      key: 'booking_checkin',
+                      title: 'Check-in email',
+                      description: 'Sent shortly before the booking starts. Includes a link to open the QR scanner.',
+                      variables: [
+                        { tag: '{{name}}', desc: 'Full name of the user' },
+                        { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
+                        { tag: '{{date}}', desc: 'Booking date' },
+                        { tag: '{{time}}', desc: 'Booking start time' },
+                        { tag: '{{checkinUrl}}', desc: 'Link to open the QR check-in page' },
+                      ],
+                    },
                   ].map(({ key, title, description, variables }) => {
                     const tpl = emailTemplates.find((x) => x.key === key);
                     const subject = tpl?.subject ?? '';
@@ -1049,32 +1081,28 @@ export const AdminDashboard: React.FC = () => {
                         <h3 className="text-base font-medium text-gray-900 mb-1">{title}</h3>
                         <p className="text-sm text-gray-600 mb-4">{description}</p>
 
-                        {/* Reminder timing — only for booking_reminder */}
+                        {/* Timing controls */}
                         {key === 'booking_reminder' && (
-                          <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <label className="text-sm font-medium text-amber-900 whitespace-nowrap">Send reminder</label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={168}
-                              className="w-20 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center"
-                              value={reminderHoursBefore}
-                              onChange={(e) => setReminderHoursBefore(e.target.value)}
-                            />
+                          <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                            <label className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+                            <input type="number" min={1} max={168} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)} />
                             <span className="text-sm text-amber-900">hours before the booking</span>
-                            <button
-                              className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
-                              onClick={async () => {
-                                try {
-                                  await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore });
-                                  setNotification({ type: 'success', message: 'Reminder timing saved' });
-                                } catch (e: any) {
-                                  setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
-                                }
-                              }}
-                            >
-                              Save timing
-                            </button>
+                            <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
+                              try { await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
+                              catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
+                            }}>Save</button>
+                          </div>
+                        )}
+                        {key === 'booking_checkin' && (
+                          <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                            <label className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+                            <input type="number" min={0} max={120} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)} />
+                            <span className="text-sm text-amber-900">minutes before the booking</span>
+                            <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
+                              try { await api.put('/admin/settings/reminder', { checkin_minutes_before: checkinMinutesBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
+                              catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
+                            }}>Save</button>
+                            <p className="w-full text-xs text-amber-700 mt-1">Note: exact send time depends on the scheduler interval (default every 10 min).</p>
                           </div>
                         )}
 

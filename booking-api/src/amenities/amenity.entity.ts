@@ -41,6 +41,11 @@ export class Amenity {
   @Column({ type: 'text', nullable: true })
   bookingRestrictionId: string | null;
 
+  // Random token encoded in the physical QR code at the amenity location.
+  // Regenerating this invalidates all printed QR codes.
+  @Column({ type: 'text', nullable: true })
+  qrToken: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

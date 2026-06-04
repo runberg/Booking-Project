@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { Button } from '../components/Button';
 import { api } from '../services/authService';
 
@@ -6,12 +7,13 @@ interface Amenity {
   id: string;
   name: string;
   description: string | null;
-  openTime: string; // HH:mm
-  closeTime: string; // HH:mm
+  openTime: string;
+  closeTime: string;
   imageUrl: string | null;
   isActive: boolean;
   bookingRestrictionId?: string | null;
   slotLength: number;
+  qrToken: string | null;
 }
 
 const placeholder = 'https://via.placeholder.com/80x80?text=Amenity';
@@ -26,7 +28,8 @@ export const AmenitiesAdmin: React.FC = () => {
   const [createOpen, setCreateOpen] = useState<boolean>(false);
   // Restrictions state
   const [restrictions, setRestrictions] = useState<Array<{ id: string; name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number; isActive: boolean }>>([]);
-  const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+  const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+  const [qrModal, setQrModal] = useState<{ amenity: Amenity; dataUrl: string } | null>(null);
   const [createRestrictionOpen, setCreateRestrictionOpen] = useState<boolean>(false);
   const [newRestriction, setNewRestriction] = useState<{ name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number }>({ name: '', daysAhead: 14, maxPerPeriod: 2, maxPerDay: 1 });
 
@@ -107,6 +110,31 @@ export const AmenitiesAdmin: React.FC = () => {
       setAmenities((prev) => prev.filter((x) => x.id !== id));
     } catch (e: any) {
       setError(e.response?.data?.message || 'Failed to delete amenity');
+    }
+  };
+
+  const openQrModal = async (a: Amenity) => {
+    const token = a.qrToken;
+    if (!token) return;
+    const dataUrl = await QRCode.toDataURL(token, { width: 300, margin: 2 });
+    setQrModal({ amenity: a, dataUrl });
+  };
+
+  const downloadQr = (dataUrl: string, amenityName: string) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `qr-${amenityName.toLowerCase().replace(/\s+/g, '-')}.png`;
+    link.click();
+  };
+
+  const regenerateQr = async (a: Amenity) => {
+    try {
+      const { data } = await api.post(`/admin/amenities/${a.id}/qr/regenerate`);
+      setAmenities((prev) => prev.map((x) => (x.id === data.id ? data : x)));
+      const dataUrl = await QRCode.toDataURL(data.qrToken, { width: 300, margin: 2 });
+      setQrModal({ amenity: data, dataUrl });
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Failed to regenerate QR code');
     }
   };
 
@@ -341,6 +369,7 @@ export const AmenitiesAdmin: React.FC = () => {
                     ) : (
                       <>
                         <Button variant="secondary" onClick={() => startEdit(a)}>Edit</Button>
+                        <Button variant="secondary" onClick={() => openQrModal(a)} title={a.qrToken ? 'View QR code' : 'No QR code yet'} disabled={!a.qrToken}>QR</Button>
                         <Button variant="secondary" className="text-red-600 hover:text-red-900" onClick={() => deleteAmenity(a.id)}>Delete</Button>
                       </>
                     )}
@@ -352,6 +381,26 @@ export const AmenitiesAdmin: React.FC = () => {
           </div>
         )}
       </div>
+      {/* QR Code Modal */}
+      {qrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setQrModal(null)} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">{qrModal.amenity.name}</h3>
+            <p className="text-xs text-gray-500 mb-4">Print and place this QR code at the amenity. Residents scan it to check in.</p>
+            <img src={qrModal.dataUrl} alt="QR code" className="mx-auto mb-4 w-52 h-52" />
+            <div className="flex gap-2 justify-center mb-4">
+              <Button onClick={() => downloadQr(qrModal.dataUrl, qrModal.amenity.name)}>Download PNG</Button>
+              <Button variant="secondary" onClick={() => regenerateQr(qrModal.amenity)}>Regenerate</Button>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+              Regenerating creates a new QR code and invalidates any previously printed ones.
+            </p>
+            <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-xl" onClick={() => setQrModal(null)}>✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Create Restriction Modal */}
       {createRestrictionOpen && (
         <div className="fixed inset-0 z-50">

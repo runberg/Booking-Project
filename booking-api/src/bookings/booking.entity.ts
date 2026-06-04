@@ -33,6 +33,12 @@ export class Booking {
   @Column({ type: 'timestamptz', nullable: true })
   reminderSentAt: Date | null;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  checkinEmailSentAt: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  checkedInAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
