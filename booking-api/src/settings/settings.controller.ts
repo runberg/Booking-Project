@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, UseGuards, Request, Inject, forwardRef } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { EmailService } from '../email/email.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -11,6 +11,7 @@ import { UserRole } from '../users/user.entity';
 export class SettingsController {
   constructor(
     private settingsService: SettingsService,
+    @Inject(forwardRef(() => EmailService))
     private emailService: EmailService,
   ) {}
 
