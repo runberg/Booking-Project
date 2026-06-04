@@ -4,17 +4,17 @@
 // Booking date/time strings (yyyy-mm-dd, HH:mm) are plain local values
 // with no timezone and are displayed as-is.
 
-// Read from localStorage immediately so timezone is correct on first render,
-// even before the async fetch to /health/config completes.
-let serverTimezone: string = (() => {
-  try { return localStorage.getItem('serverTimezone') || Intl.DateTimeFormat().resolvedOptions().timeZone; }
-  catch { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
-})();
-
 export function setServerTimezone(tz: string): void {
   if (!tz) return;
-  serverTimezone = tz;
   try { localStorage.setItem('serverTimezone', tz); } catch {}
+}
+
+function getTimezone(): string {
+  try {
+    return localStorage.getItem('serverTimezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }
 }
 
 export function formatIsoDateToDmy(isoDate: string): string {
@@ -43,11 +43,11 @@ export function formatDateTimeDmy(input: string): string {
   const d = new Date(normalized);
   if (isNaN(d.getTime())) return input;
 
-  // Format in the server's timezone so times are consistent regardless of
-  // what timezone the admin's browser is in.
+  // Read timezone on every call so it's always current (fetched async from server).
+  const timezone = getTimezone();
   try {
     const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: serverTimezone,
+      timeZone: timezone,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
