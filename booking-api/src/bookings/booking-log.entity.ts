@@ -14,7 +14,7 @@ export class BookingLog {
   id: string;
 
   @Column('text')
-  action: 'create' | 'delete' | 'login';
+  action: 'create' | 'delete' | 'login' | 'reminder_sent' | 'checkin_email_sent' | 'checked_in';
 
   // Nullable for login events which have no associated booking
   @Column({ type: 'text', nullable: true })

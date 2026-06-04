@@ -17,6 +17,18 @@ export class EmailTemplatesController {
     return { text: template?.body || 'Legal note - Booking confirmation' };
   }
 
+  @Get('cancel-page-content')
+  async getCancelPageContent() {
+    const [confirm, success] = await Promise.all([
+      this.svc.getByKey('cancel_page_confirm_text'),
+      this.svc.getByKey('cancel_page_success_text'),
+    ]);
+    return {
+      confirmText: confirm?.body || 'Are you sure you want to cancel this booking?',
+      successText: success?.body || 'Your booking has been cancelled.',
+    };
+  }
+
   @Get('checkin-page-content')
   async getCheckinPageContent() {
     const [instructions, success, mismatch] = await Promise.all([

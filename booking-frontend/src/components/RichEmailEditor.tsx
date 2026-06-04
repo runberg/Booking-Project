@@ -1,12 +1,18 @@
 import React, { useEffect } from 'react';
 
-// Wraps {{variable}} text in a highlighted pill so it's visually distinct.
-// The span is stripped by the backend sanitizer on save; only {{variable}} text is stored.
+// Wraps {{variable}} text in a highlighted pill — but ONLY in text content, not
+// inside HTML tag attributes (e.g. href="{{cancelUrl}}" must stay intact so the
+// browser renders the cancel button correctly in the contenteditable).
 function decorateVariables(html: string): string {
-  return html.replace(
-    /\{\{(\w+)\}\}/g,
-    '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:0.85em">{{$1}}</span>',
-  );
+  const pill = (name: string) =>
+    `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:0.85em">{{${name}}}</span>`;
+
+  // Alternate between HTML tags (group 1) and {{variable}} tokens (group 2).
+  // Tags are returned unchanged; variables in text nodes get the pill treatment.
+  return html.replace(/(<[^>]*>)|(\{\{(\w+)\}\})/g, (match, tag, _variable, varName) => {
+    if (tag) return tag;        // inside an HTML tag — leave untouched
+    return pill(varName);       // text node variable — decorate
+  });
 }
 
 interface Props {

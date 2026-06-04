@@ -97,6 +97,15 @@ export class BookingsController {
     });
   }
 
+  @Get('logs/no-shows')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async listNoShows(
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '25',
+  ) {
+    return this.bookingsService.listNoShows(Number(page) || 1, Number(pageSize) || 25);
+  }
+
   @Get('logs/export')
   @Roles(UserRole.ADMIN, UserRole.SUPER)
   async exportLogs(

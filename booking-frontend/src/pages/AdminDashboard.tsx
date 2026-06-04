@@ -94,7 +94,7 @@ export const AdminDashboard: React.FC = () => {
   // Logs state
   type LogEntry = {
     id: string;
-    action: 'create' | 'delete' | 'login';
+    action: 'create' | 'delete' | 'login' | 'reminder_sent' | 'checkin_email_sent' | 'checked_in' | 'no_show';
     amenityName: string | null;
     date: string | null;
     startTime: string | null;
@@ -374,6 +374,20 @@ export const AdminDashboard: React.FC = () => {
       const nextSortBy = overrides?.sortBy ?? logsSortBy;
       const nextSortDir = overrides?.sortDir ?? logsSortDir;
       const nextFilters = overrides?.filters ?? logsFilters;
+
+      // No-shows use a different endpoint
+      if (nextFilters.action === 'no_show') {
+        const params = new URLSearchParams({ page: String(nextPage), pageSize: String(logsPageSize) });
+        const res = await fetch(`${API_BASE_URL}/bookings/logs/no-shows?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+        });
+        if (!res.ok) throw new Error('Failed to fetch no-shows');
+        const data = await res.json();
+        setLogs(data.items);
+        setLogsTotal(data.total);
+        return;
+      }
+
       const params = new URLSearchParams({
         page: String(nextPage),
         pageSize: String(logsPageSize),
@@ -971,6 +985,18 @@ export const AdminDashboard: React.FC = () => {
                         defaultBody: 'Legal note - Booking confirmation',
                       },
                       {
+                        key: 'cancel_page_confirm_text',
+                        title: 'Cancellation page — confirmation text',
+                        description: 'Shown on the cancel booking page before the user confirms cancellation.',
+                        defaultBody: 'Are you sure you want to cancel this booking? This will free the slot for other residents.',
+                      },
+                      {
+                        key: 'cancel_page_success_text',
+                        title: 'Cancellation page — success message',
+                        description: 'Shown after a booking has been successfully cancelled.',
+                        defaultBody: 'Your booking has been cancelled and the slot is now available for others.',
+                      },
+                      {
                         key: 'checkin_page_instructions',
                         title: 'Check-in page — instructions',
                         description: 'Shown on the check-in page before the user scans the QR code.',
@@ -1245,6 +1271,10 @@ export const AdminDashboard: React.FC = () => {
                         <option value="login">Login</option>
                         <option value="create">Booking created</option>
                         <option value="delete">Booking cancelled</option>
+                        <option value="reminder_sent">Reminder sent</option>
+                        <option value="checkin_email_sent">Check-in email sent</option>
+                        <option value="checked_in">Checked in</option>
+                        <option value="no_show">No-shows (missed check-in)</option>
                       </select>
                     </div>
                     <div>
@@ -1370,6 +1400,10 @@ export const AdminDashboard: React.FC = () => {
                             {isLogin && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">Login</span>}
                             {isCreate && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">Booked</span>}
                             {isDelete && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Cancelled</span>}
+                            {l.action === 'reminder_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">Reminder sent</span>}
+                            {l.action === 'checkin_email_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-cyan-100 text-cyan-800">Check-in email</span>}
+                            {l.action === 'checked_in' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">Checked in</span>}
+                            {l.action === 'no_show' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">No-show</span>}
                           </td>
                           <td className="px-4 py-2 whitespace-nowrap">
                             <button

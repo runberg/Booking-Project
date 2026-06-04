@@ -30,6 +30,14 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
     subject: '',
     body: 'Legal note - Booking confirmation',
   },
+  cancel_page_confirm_text: {
+    subject: '',
+    body: 'Are you sure you want to cancel this booking? This will free the slot for other residents.',
+  },
+  cancel_page_success_text: {
+    subject: '',
+    body: 'Your booking has been cancelled and the slot is now available for others.',
+  },
   checkin_page_instructions: {
     subject: '',
     body: 'Point your camera at the QR code posted at the amenity to confirm your attendance.',

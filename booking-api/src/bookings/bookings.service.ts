@@ -348,6 +348,68 @@ export class BookingsService implements OnModuleInit {
     return { ok: true, message: 'Your booking has been cancelled.' };
   }
 
+  // ── Activity event log ───────────────────────────────────────────────────
+
+  async logEvent(
+    action: 'reminder_sent' | 'checkin_email_sent' | 'checked_in',
+    bookingId: string,
+  ): Promise<void> {
+    const booking = await this.bookingsRepo.findOne({ where: { id: bookingId } });
+    if (!booking) return;
+    await this.writeLog(action, booking);
+  }
+
+  async listNoShows(page: number, pageSize: number) {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const qb = this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.checkinEmailSentAt IS NOT NULL')
+      .andWhere('b.checkedInAt IS NULL')
+      .andWhere(
+        '(b.date < :today OR (b.date = :today AND b.startTime < :nowTime))',
+        { today: todayStr, nowTime },
+      )
+      .orderBy('b.date', 'DESC')
+      .addOrderBy('b.startTime', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const [bookings, total] = await qb.getManyAndCount();
+
+    const [allAmenities, users] = await Promise.all([
+      this.amenitiesService.listAll(),
+      this.usersService.findByIds([...new Set(bookings.map((b) => b.userId))]),
+    ]);
+    const amenityById = new Map(allAmenities.map((a) => [a.id, a]));
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const items = bookings.map((b) => {
+      const user = userById.get(b.userId);
+      const amenity = amenityById.get(b.amenityId);
+      return {
+        id: b.id,
+        action: 'no_show' as const,
+        amenityName: amenity?.name ?? 'Amenity',
+        date: b.date,
+        startTime: b.startTime,
+        slotLength: b.slotLength,
+        userId: b.userId,
+        userEmail: user?.email ?? '',
+        userName: user?.name ?? '',
+        building: user?.building ?? '',
+        apartmentNumber: user?.apartmentNumber ?? '',
+        ipAddress: null,
+        createdAt: b.checkinEmailSentAt,
+      };
+    });
+
+    return { items, total, page, pageSize };
+  }
+
   // ── Check-in helpers ─────────────────────────────────────────────────────
 
   async findUnsentCheckinEmails(): Promise<Booking[]> {
@@ -420,11 +482,12 @@ export class BookingsService implements OnModuleInit {
 
     await this.bookingsRepo.update(booking.id, { checkedInAt: new Date() });
     await this.checkinTokenRepo.update(checkinToken.id, { usedAt: new Date() });
+    await this.writeLog('checked_in', booking);
 
     return { ok: true, message: 'Check-in successful!' };
   }
 
-  private async writeLog(action: 'create' | 'delete', b: Booking, ipAddress?: string) {
+  private async writeLog(action: BookingLog['action'], b: Booking, ipAddress?: string) {
     const [user, amenity] = await Promise.all([
       this.usersService.findById(b.userId),
       this.amenitiesService.findOne(b.amenityId),

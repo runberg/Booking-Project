@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { API_BASE_URL } from '../services/authService';
-import { formatDateTimeDmy, formatIsoDateToDmy } from '../utils/date';
+import { formatIsoDateToDmy } from '../utils/date';
 
 type Preview = {
   amenityName: string;
@@ -13,6 +13,7 @@ type Preview = {
   userName: string;
 };
 
+type PageContent = { confirmText: string; successText: string };
 type Stage = 'loading' | 'confirm' | 'cancelled' | 'error';
 
 export const CancelBookingPage: React.FC = () => {
@@ -20,27 +21,28 @@ export const CancelBookingPage: React.FC = () => {
   const navigate = useNavigate();
   const [stage, setStage] = useState<Stage>('loading');
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [content, setContent] = useState<PageContent>({
+    confirmText: 'Are you sure you want to cancel this booking? This will free the slot for other residents.',
+    successText: 'Your booking has been cancelled and the slot is now available for others.',
+  });
   const [errorMsg, setErrorMsg] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     if (!token) { setStage('error'); setErrorMsg('Invalid link.'); return; }
-    fetch(`${API_BASE_URL}/bookings/cancel-preview/${token}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || 'This cancel link is invalid or has expired.');
-        }
-        return res.json();
-      })
-      .then((data: Preview) => {
-        setPreview(data);
+    Promise.all([
+      fetch(`${API_BASE_URL}/bookings/cancel-preview/${token}`).then(async (r) => {
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.message || 'This cancel link is invalid or has expired.'); }
+        return r.json() as Promise<Preview>;
+      }),
+      fetch(`${API_BASE_URL}/email-templates/cancel-page-content`).then((r) => r.ok ? r.json() : null),
+    ])
+      .then(([previewData, pageContent]) => {
+        setPreview(previewData);
+        if (pageContent) setContent(pageContent);
         setStage('confirm');
       })
-      .catch((e) => {
-        setErrorMsg(e.message);
-        setStage('error');
-      });
+      .catch((e) => { setErrorMsg(e.message); setStage('error'); });
   }, [token]);
 
   const handleCancel = async () => {
@@ -52,10 +54,7 @@ export const CancelBookingPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Cancellation failed.');
-      }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Cancellation failed.'); }
       setStage('cancelled');
     } catch (e: any) {
       setErrorMsg(e.message);
@@ -69,7 +68,6 @@ export const CancelBookingPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md">
         <h1 className="text-center text-2xl font-bold text-gray-900 mb-6">Booking System</h1>
-
         <Card>
           {stage === 'loading' && (
             <div className="text-center py-8">
@@ -81,27 +79,15 @@ export const CancelBookingPage: React.FC = () => {
           {stage === 'confirm' && preview && (
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Cancel your booking</h2>
-              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-6 space-y-2 text-sm text-gray-700">
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-4 space-y-2 text-sm text-gray-700">
                 <div><span className="font-medium">Amenity:</span> {preview.amenityName}</div>
                 <div><span className="font-medium">Date:</span> {formatIsoDateToDmy(preview.date)}</div>
                 <div><span className="font-medium">Time:</span> {preview.startTime} ({preview.slotLength} min)</div>
               </div>
-              <p className="text-sm text-gray-600 mb-6">
-                Are you sure you want to cancel this booking? This will free the slot for other residents.
-              </p>
+              <p className="text-sm text-gray-600 mb-6">{content.confirmText}</p>
               <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate('/login')}
-                  className="flex-1"
-                >
-                  Keep booking
-                </Button>
-                <Button
-                  onClick={handleCancel}
-                  disabled={isCancelling}
-                  className="flex-1 bg-red-600 hover:bg-red-700"
-                >
+                <Button variant="secondary" onClick={() => navigate('/login')} className="flex-1">Keep booking</Button>
+                <Button onClick={handleCancel} disabled={isCancelling} className="flex-1 bg-red-600 hover:bg-red-700">
                   {isCancelling ? 'Cancelling…' : 'Confirm cancellation'}
                 </Button>
               </div>
@@ -116,12 +102,8 @@ export const CancelBookingPage: React.FC = () => {
                 </svg>
               </div>
               <h2 className="text-lg font-semibold text-gray-900 mb-2">Booking cancelled</h2>
-              <p className="text-sm text-gray-600 mb-6">
-                Your booking has been cancelled and the slot is now available for others.
-              </p>
-              <Button onClick={() => navigate('/login')} className="w-full">
-                Back to login
-              </Button>
+              <p className="text-sm text-gray-600 mb-6">{content.successText}</p>
+              <Button onClick={() => navigate('/login')} className="w-full">Back to login</Button>
             </div>
           )}
 
@@ -134,9 +116,7 @@ export const CancelBookingPage: React.FC = () => {
               </div>
               <h2 className="text-lg font-semibold text-gray-900 mb-2">Link unavailable</h2>
               <p className="text-sm text-gray-600 mb-6">{errorMsg}</p>
-              <Button onClick={() => navigate('/login')} className="w-full">
-                Back to login
-              </Button>
+              <Button onClick={() => navigate('/login')} className="w-full">Back to login</Button>
             </div>
           )}
         </Card>
