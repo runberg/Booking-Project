@@ -2,8 +2,13 @@ import { Controller, Get } from '@nestjs/common';
 
 @Controller('health')
 export class HealthController {
-  @Get() // GET /health
+  @Get()
   ping() {
     return { ok: true, ts: Date.now() };
+  }
+
+  @Get('config')
+  config() {
+    return { timezone: process.env.TZ || 'UTC' };
   }
 }

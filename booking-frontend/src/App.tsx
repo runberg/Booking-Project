@@ -9,7 +9,8 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { SecurityPage } from './pages/SecurityPage';
 const CancelBookingPage = React.lazy(() => import('./pages/CancelBookingPage').then(m => ({ default: m.CancelBookingPage })));
 const CheckinPage = React.lazy(() => import('./pages/CheckinPage').then(m => ({ default: m.CheckinPage })));
-import { authService } from './services/authService';
+import { authService, API_BASE_URL } from './services/authService';
+import { setServerTimezone } from './utils/date';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = authService.isAuthenticated();
@@ -23,6 +24,13 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (user?.role === 'security') return <Navigate to="/security" replace />;
   return <Navigate to="/bookings" replace />;
 };
+
+// Fetch server timezone once on load so all timestamps display in the
+// server's configured timezone regardless of the browser's local timezone.
+fetch(`${API_BASE_URL}/health/config`)
+  .then((r) => r.json())
+  .then((d) => { if (d?.timezone) setServerTimezone(d.timezone); })
+  .catch(() => {});
 
 function App() {
   return (

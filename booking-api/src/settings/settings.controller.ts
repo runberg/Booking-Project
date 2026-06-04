@@ -1,5 +1,6 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, UseGuards, Request } from '@nestjs/common';
 import { SettingsService } from './settings.service';
+import { EmailService } from '../email/email.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -8,7 +9,28 @@ import { UserRole } from '../users/user.entity';
 @Controller('admin/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SettingsController {
-  constructor(private settingsService: SettingsService) {}
+  constructor(
+    private settingsService: SettingsService,
+    private emailService: EmailService,
+  ) {}
+
+  @Post('smtp/test')
+  @Roles(UserRole.ADMIN)
+  async testSmtp(@Request() req): Promise<{ ok: boolean; error?: string }> {
+    try {
+      await this.emailService.sendGenericEmail(
+        req.user.email,
+        'SMTP Test — Booking System',
+        'This is a test email from the Booking System admin panel.\n\nIf you received this, your SMTP configuration is working correctly.',
+      );
+      return { ok: true };
+    } catch (e: any) {
+      // Return the full error so the admin can diagnose the problem
+      const msg: string =
+        e?.response || e?.message || String(e);
+      return { ok: false, error: msg };
+    }
+  }
 
   @Get('smtp')
   @Roles(UserRole.ADMIN)

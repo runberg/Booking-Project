@@ -1240,7 +1240,24 @@ export const AdminDashboard: React.FC = () => {
                         onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_from: e.target.value }))}
                       />
                     </div>
-                    <div className="flex justify-end pt-2">
+                    <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
+                      <Button
+                        variant="secondary"
+                        onClick={async () => {
+                          try {
+                            const { data } = await api.post('/admin/settings/smtp/test');
+                            if (data.ok) {
+                              setNotification({ type: 'success', message: 'Test email sent successfully to your account.' });
+                            } else {
+                              setNotification({ type: 'error', message: `SMTP error: ${data.error || 'Unknown error'}` });
+                            }
+                          } catch (e: any) {
+                            setNotification({ type: 'error', message: e.response?.data?.message || 'Test failed' });
+                          }
+                        }}
+                      >
+                        Send test email
+                      </Button>
                       <Button onClick={saveSmtpSettings} disabled={isSavingSettings}>
                         {isSavingSettings ? 'Saving...' : 'Save Settings'}
                       </Button>

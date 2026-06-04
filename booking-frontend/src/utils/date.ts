@@ -1,7 +1,16 @@
-// Date formatting utilities for consistent DD-MM-YYYY rendering across the app
+// Date formatting utilities.
+// All datetimes from the API are in UTC; we display them in the server's
+// configured timezone (fetched once on app load via setServerTimezone).
+// Booking date/time strings (yyyy-mm-dd, HH:mm) are plain local values
+// with no timezone and are displayed as-is.
+
+let serverTimezone: string = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+export function setServerTimezone(tz: string): void {
+  if (tz) serverTimezone = tz;
+}
 
 export function formatIsoDateToDmy(isoDate: string): string {
-  // expects yyyy-mm-dd
   if (!isoDate || typeof isoDate !== 'string') return isoDate as any;
   const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return isoDate;
@@ -10,33 +19,45 @@ export function formatIsoDateToDmy(isoDate: string): string {
 }
 
 export function formatDateTimeDmy(input: string): string {
-  // Handles 'yyyy-mm-dd HH:mm' (plain, no timezone) or ISO datetimes from the API.
-  // Returns 'DD-MM-YYYY HH:mm' in the browser's local timezone.
   if (!input || typeof input !== 'string') return input as any;
 
-  // Plain 'yyyy-mm-dd HH:mm' with no time-zone info — treat as-is (already local).
+  // Plain 'yyyy-mm-dd HH:mm' — no timezone, display as-is.
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(input)) {
     const [date, time] = input.split(' ');
     const [y, mm, dd] = date.split('-');
     return `${dd}-${mm}-${y} ${time}`;
   }
 
-  // ISO datetime from the API. Strings without a Z or offset (e.g. TypeORM
-  // sometimes omits it) would otherwise be parsed as local time by browsers,
-  // giving the wrong UTC→local conversion. Appending Z forces correct UTC parse.
+  // ISO datetime from the API (UTC). Ensure Z so it's always parsed as UTC
+  // even if TypeORM omits the suffix.
   const normalized =
     /Z$|[+-]\d{2}:\d{2}$/.test(input) ? input : input + 'Z';
 
   const d = new Date(normalized);
-  if (!isNaN(d.getTime())) {
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const y = String(d.getFullYear());
-    const hh = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
+  if (isNaN(d.getTime())) return input;
+
+  // Format in the server's timezone so times are consistent regardless of
+  // what timezone the admin's browser is in.
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: serverTimezone,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+    const p: Record<string, string> = {};
+    for (const part of parts) p[part.type] = part.value;
+    return `${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}`;
+  } catch {
+    // Fallback if timezone string is invalid
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const y = String(d.getUTCFullYear());
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const min = String(d.getUTCMinutes()).padStart(2, '0');
     return `${dd}-${mm}-${y} ${hh}:${min}`;
   }
-  return input;
 }
-
-
