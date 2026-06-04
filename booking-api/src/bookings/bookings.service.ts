@@ -351,7 +351,7 @@ export class BookingsService implements OnModuleInit {
   // ── Activity event log ───────────────────────────────────────────────────
 
   async logEvent(
-    action: 'reminder_sent' | 'checkin_email_sent' | 'checked_in',
+    action: 'reminder_sent' | 'reminder_failed' | 'checkin_email_sent' | 'checkin_email_failed' | 'checked_in' | 'confirmation_failed',
     bookingId: string,
   ): Promise<void> {
     const booking = await this.bookingsRepo.findOne({ where: { id: bookingId } });

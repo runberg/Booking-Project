@@ -221,6 +221,8 @@ export class BookingsController {
         );
       } catch (e) {
         console.error('Booking confirmation email failed:', e);
+        // Log the failure so it's visible in the admin logs
+        await this.bookingsService.logEvent('confirmation_failed', booking.id).catch(() => {});
       }
     })();
 

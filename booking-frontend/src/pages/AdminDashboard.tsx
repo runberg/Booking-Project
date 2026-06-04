@@ -94,7 +94,7 @@ export const AdminDashboard: React.FC = () => {
   // Logs state
   type LogEntry = {
     id: string;
-    action: 'create' | 'delete' | 'login' | 'reminder_sent' | 'checkin_email_sent' | 'checked_in' | 'no_show';
+    action: 'create' | 'delete' | 'login' | 'reminder_sent' | 'reminder_failed' | 'checkin_email_sent' | 'checkin_email_failed' | 'checked_in' | 'confirmation_failed' | 'no_show';
     amenityName: string | null;
     date: string | null;
     startTime: string | null;
@@ -1272,7 +1272,10 @@ export const AdminDashboard: React.FC = () => {
                         <option value="create">Booking created</option>
                         <option value="delete">Booking cancelled</option>
                         <option value="reminder_sent">Reminder sent</option>
+                        <option value="reminder_failed">Reminder failed</option>
                         <option value="checkin_email_sent">Check-in email sent</option>
+                        <option value="checkin_email_failed">Check-in email failed</option>
+                        <option value="confirmation_failed">Confirmation email failed</option>
                         <option value="checked_in">Checked in</option>
                         <option value="no_show">No-shows (missed check-in)</option>
                       </select>
@@ -1401,7 +1404,10 @@ export const AdminDashboard: React.FC = () => {
                             {isCreate && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">Booked</span>}
                             {isDelete && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Cancelled</span>}
                             {l.action === 'reminder_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">Reminder sent</span>}
+                            {l.action === 'reminder_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Reminder failed</span>}
                             {l.action === 'checkin_email_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-cyan-100 text-cyan-800">Check-in email</span>}
+                            {l.action === 'checkin_email_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Check-in email failed</span>}
+                            {l.action === 'confirmation_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Confirmation failed</span>}
                             {l.action === 'checked_in' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">Checked in</span>}
                             {l.action === 'no_show' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">No-show</span>}
                           </td>

@@ -114,6 +114,9 @@ export class RemindersService implements OnModuleInit {
       this.logger.log(`Check-in email sent to ${user.email} for booking ${booking.id}`);
     } catch (e) {
       this.logger.error(`Failed to send check-in email for booking ${booking.id}`, e);
+      // Mark as sent anyway to prevent infinite retry loops; log the failure
+      await this.bookingsService.markCheckinEmailSent(booking.id);
+      await this.bookingsService.logEvent('checkin_email_failed', booking.id);
     }
   }
 
@@ -150,6 +153,9 @@ export class RemindersService implements OnModuleInit {
       this.logger.log(`Reminder sent to ${user.email} for booking ${booking.id}`);
     } catch (e) {
       this.logger.error(`Failed to send reminder for booking ${booking.id}`, e);
+      // Mark as sent to prevent infinite retry; log the failure
+      await this.bookingsService.markReminderSent(booking.id);
+      await this.bookingsService.logEvent('reminder_failed', booking.id);
     }
   }
 }

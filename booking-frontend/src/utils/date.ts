@@ -10,16 +10,24 @@ export function formatIsoDateToDmy(isoDate: string): string {
 }
 
 export function formatDateTimeDmy(input: string): string {
-  // Handles 'yyyy-mm-dd HH:mm' or ISO datetimes; returns 'DD-MM-YYYY HH:mm'
+  // Handles 'yyyy-mm-dd HH:mm' (plain, no timezone) or ISO datetimes from the API.
+  // Returns 'DD-MM-YYYY HH:mm' in the browser's local timezone.
   if (!input || typeof input !== 'string') return input as any;
-  // Case 1: 'yyyy-mm-dd HH:mm'
-  const parts = input.split(' ');
-  if (parts.length === 2 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0]) && /^\d{2}:\d{2}$/.test(parts[1])) {
-    const [y, mm, dd] = parts[0].split('-');
-    return `${dd}-${mm}-${y} ${parts[1]}`;
+
+  // Plain 'yyyy-mm-dd HH:mm' with no time-zone info — treat as-is (already local).
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(input)) {
+    const [date, time] = input.split(' ');
+    const [y, mm, dd] = date.split('-');
+    return `${dd}-${mm}-${y} ${time}`;
   }
-  // Case 2: ISO string
-  const d = new Date(input);
+
+  // ISO datetime from the API. Strings without a Z or offset (e.g. TypeORM
+  // sometimes omits it) would otherwise be parsed as local time by browsers,
+  // giving the wrong UTC→local conversion. Appending Z forces correct UTC parse.
+  const normalized =
+    /Z$|[+-]\d{2}:\d{2}$/.test(input) ? input : input + 'Z';
+
+  const d = new Date(normalized);
   if (!isNaN(d.getTime())) {
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
