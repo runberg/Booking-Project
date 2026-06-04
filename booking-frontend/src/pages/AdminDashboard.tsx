@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -6,6 +6,7 @@ import { Notification } from '../components/Notification';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { Users, LogOut, Trash2, Mail, Menu, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { AmenitiesAdmin } from './AmenitiesAdmin';
+import { RichEmailEditor } from '../components/RichEmailEditor';
 import { authService, api, API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
 
@@ -132,6 +133,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Content tab sub-tab
   const [contentSubTab, setContentSubTab] = useState<'rules' | 'mail'>('rules');
+  const editorDomRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Email templates state
   const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; subject: string | null; body: string }>>([]);
@@ -1033,15 +1035,7 @@ export const AdminDashboard: React.FC = () => {
                     },
                   ].map(({ key, title, description, variables }) => {
                     const tpl = emailTemplates.find((x) => x.key === key);
-                    const body = tpl?.body ?? '';
                     const subject = tpl?.subject ?? '';
-                    const setBody = (val: string) => setEmailTemplates((prev) => {
-                      const copy = [...prev];
-                      const idx = copy.findIndex((x) => x.key === key);
-                      if (idx >= 0) copy[idx] = { ...copy[idx], body: val };
-                      else copy.push({ key, subject: null, body: val });
-                      return copy;
-                    });
                     const setSubject = (val: string) => setEmailTemplates((prev) => {
                       const copy = [...prev];
                       const idx = copy.findIndex((x) => x.key === key);
@@ -1049,22 +1043,6 @@ export const AdminDashboard: React.FC = () => {
                       else copy.push({ key, subject: val, body: '' });
                       return copy;
                     });
-
-                    const insertTag = (before: string, after: string, textareaId: string) => {
-                      const el = document.getElementById(textareaId) as HTMLTextAreaElement | null;
-                      if (!el) return;
-                      const start = el.selectionStart ?? 0;
-                      const end = el.selectionEnd ?? 0;
-                      const selected = body.slice(start, end) || 'text';
-                      const next = body.slice(0, start) + before + selected + after + body.slice(end);
-                      setBody(next);
-                      requestAnimationFrame(() => {
-                        el.focus();
-                        el.setSelectionRange(start + before.length, start + before.length + selected.length);
-                      });
-                    };
-
-                    const taId = `tpl-${key}`;
 
                     return (
                       <Card key={key}>
@@ -1110,52 +1088,21 @@ export const AdminDashboard: React.FC = () => {
                             value={subject}
                             onChange={(e) => setSubject(e.target.value)}
                           />
-                          <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are supported in the subject.</p>
+                          <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are also supported in the subject.</p>
                         </div>
 
-                        {/* Variable legend */}
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {variables.map(({ tag, desc }) => (
-                            <span key={tag} className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded" title={desc}>
-                              <code className="font-mono text-primary-700">{tag}</code>
-                              <span className="text-gray-500">{desc}</span>
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Formatting toolbar */}
-                        <div className="flex flex-wrap gap-1 mb-1 p-1.5 bg-gray-50 border border-gray-200 rounded-t-md border-b-0">
-                          {[
-                            { label: 'B', title: 'Bold', before: '<strong>', after: '</strong>', className: 'font-bold' },
-                            { label: 'I', title: 'Italic', before: '<em>', after: '</em>', className: 'italic' },
-                            { label: 'H1', title: 'Heading 1', before: '<h1>', after: '</h1>', className: '' },
-                            { label: 'H2', title: 'Heading 2', before: '<h2>', after: '</h2>', className: '' },
-                            { label: '⊞', title: 'Center', before: '<div style="text-align:center">', after: '</div>', className: '' },
-                          ].map(({ label, title, before, after, className }) => (
-                            <button
-                              key={label}
-                              type="button"
-                              title={title}
-                              onClick={() => insertTag(before, after, taId)}
-                              className={`px-2.5 py-1 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 ${className}`}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                          <span className="ml-auto text-xs text-gray-400 self-center pr-1">HTML is saved and rendered in email</span>
-                        </div>
-
-                        <textarea
-                          id={taId}
-                          className="w-full min-h-[220px] rounded-b-md rounded-t-none border border-gray-300 p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          value={body}
-                          onChange={(e) => setBody(e.target.value)}
-                          spellCheck={false}
+                        {/* WYSIWYG editor */}
+                        <RichEmailEditor
+                          initialValue={tpl?.body ?? ''}
+                          variables={variables.map(v => ({ tag: v.tag, label: v.desc.split(' ').slice(0, 2).join(' ') }))}
+                          showCancelButton={key === 'booking_reminder'}
+                          onMount={(el) => { editorDomRefs.current[key] = el; }}
                         />
 
                         <div className="mt-3 flex justify-end">
                           <Button onClick={async () => {
                             try {
+                              const body = editorDomRefs.current[key]?.innerHTML ?? '';
                               await api.put(`/admin/email-templates/${key}`, { body, subject });
                               setNotification({ type: 'success', message: 'Template saved' });
                             } catch (e: any) {
