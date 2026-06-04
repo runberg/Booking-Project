@@ -30,6 +30,9 @@ export class Booking {
   @Column('integer')
   slotLength: number;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  reminderSentAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

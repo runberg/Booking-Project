@@ -19,7 +19,9 @@ import { BookingRestriction } from './restrictions/booking-restriction.entity';
 import { RestrictionsModule } from './restrictions/restrictions.module';
 import { Booking } from './bookings/booking.entity';
 import { BookingLog } from './bookings/booking-log.entity';
+import { BookingCancelToken } from './bookings/booking-cancel-token.entity';
 import { BookingsModule } from './bookings/bookings.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { EmailTemplate } from './email-templates/email-template.entity';
 import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { Setting } from './settings/setting.entity';
@@ -42,6 +44,7 @@ import { SecurityModule } from './security/security.module';
           BookingRestriction,
           Booking,
           BookingLog,
+          BookingCancelToken,
           EmailTemplate,
           Setting,
         ],
@@ -62,6 +65,7 @@ import { SecurityModule } from './security/security.module';
     AmenitiesModule,
     RestrictionsModule,
     BookingsModule,
+    RemindersModule,
     EmailTemplatesModule,
     SettingsModule,
     SecurityModule,

@@ -130,8 +130,11 @@ export const AdminDashboard: React.FC = () => {
   const [setupWarnings, setSetupWarnings] = useState<{ smtp: boolean; amenities: boolean }>({ smtp: false, amenities: false });
   const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
 
+  // Content tab sub-tab
+  const [contentSubTab, setContentSubTab] = useState<'rules' | 'mail'>('rules');
+
   // Email templates state
-  const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; body: string }>>([]);
+  const [emailTemplates, setEmailTemplates] = useState<Array<{ key: string; subject: string | null; body: string }>>([]);
   const [isLoadingEmails, setIsLoadingEmails] = useState(false);
 
   const fetchEmailTemplates = async () => {
@@ -906,11 +909,31 @@ export const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Content / Email templates tab */}
+          {/* Content tab */}
           {activeTab === 'emails' && (
             <div>
-              <div className="mb-6">
+              <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">Content Management</h2>
+              </div>
+
+              {/* Sub-tabs */}
+              <div className="flex gap-1 mb-6 border-b border-gray-200">
+                {([
+                  { key: 'rules', label: 'Rules & Regulations' },
+                  { key: 'mail', label: 'Mail Content' },
+                ] as const).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setContentSubTab(t.key)}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                      contentSubTab === t.key
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
               {isLoadingEmails ? (
@@ -918,104 +941,197 @@ export const AdminDashboard: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
                   <p className="mt-2 text-sm text-gray-600">Loading templates...</p>
                 </div>
+              ) : contentSubTab === 'rules' ? (
+                <Card>
+                  <div className="mb-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-1">Rules and Regulations</h3>
+                    <p className="text-sm text-gray-600">Legal texts shown to users during registration and booking. Plain text only.</p>
+                  </div>
+                  <div className="space-y-6">
+                    {[
+                      {
+                        key: 'registration_legal_text',
+                        title: 'Registration Legal Text',
+                        description: 'Shown above the "Create account" button on the registration page.',
+                        defaultBody: 'Legal note - Account creation',
+                      },
+                      {
+                        key: 'booking_legal_text',
+                        title: 'Booking Confirmation Legal Text',
+                        description: 'Shown above the "Confirm booking" button when confirming a booking.',
+                        defaultBody: 'Legal note - Booking confirmation',
+                      },
+                    ].map(({ key, title, description, defaultBody }) => (
+                      <div key={key}>
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
+                        <p className="text-sm text-gray-600 mb-2">{description}</p>
+                        <textarea
+                          className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm font-mono"
+                          value={emailTemplates.find((x) => x.key === key)?.body || defaultBody}
+                          onChange={(e) => setEmailTemplates((prev) => {
+                            const copy = [...prev];
+                            const idx = copy.findIndex((x) => x.key === key);
+                            if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
+                            else copy.push({ key, body: e.target.value });
+                            return copy;
+                          })}
+                        />
+                        <div className="mt-2 flex justify-end">
+                          <Button onClick={async () => {
+                            try {
+                              const body = emailTemplates.find((x) => x.key === key)?.body ?? defaultBody;
+                              await api.put(`/admin/email-templates/${key}`, { body });
+                              setNotification({ type: 'success', message: 'Legal text saved' });
+                            } catch (e: any) {
+                              setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
+                            }
+                          }}>Save</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
               ) : (
                 <div className="space-y-6">
-                  <Card>
-                    <div className="mb-6">
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Rules and Regulations</h3>
-                      <p className="text-sm text-gray-600">Manage legal texts and terms that appear during registration and booking processes.</p>
-                    </div>
-                    <div className="space-y-6">
-                      {[
-                        {
-                          key: 'registration_legal_text',
-                          title: 'Registration Legal Text',
-                          description: 'This text appears above the "Create account" button on the registration page.',
-                          defaultBody: 'Legal note - Account creation',
-                        },
-                        {
-                          key: 'booking_legal_text',
-                          title: 'Booking Confirmation Legal Text',
-                          description: 'This text appears above the "Confirm booking" button when confirming a booking.',
-                          defaultBody: 'Legal note - Booking confirmation',
-                        },
-                      ].map(({ key, title, description, defaultBody }) => (
-                        <div key={key}>
-                          <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
-                          <p className="text-sm text-gray-600 mb-3">{description}</p>
-                          <textarea
-                            className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm"
-                            value={emailTemplates.find((x) => x.key === key)?.body || defaultBody}
-                            onChange={(e) => setEmailTemplates((prev) => {
-                              const copy = [...prev];
-                              const idx = copy.findIndex((x) => x.key === key);
-                              if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
-                              else copy.push({ key, body: e.target.value });
-                              return copy;
-                            })}
-                          />
-                          <div className="mt-3 flex justify-end">
-                            <Button onClick={async () => {
-                              try {
-                                const body = emailTemplates.find((x) => x.key === key)?.body ?? defaultBody;
-                                await api.put(`/admin/email-templates/${key}`, { body });
-                                setNotification({ type: 'success', message: 'Legal text saved' });
-                              } catch (e: any) {
-                                setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
-                              }
-                            }}>Save</Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
+                  {[
+                    {
+                      key: 'registration',
+                      title: 'Registration email',
+                      description: 'Sent to users after they register to verify their email address.',
+                      variables: [
+                        { tag: '{{name}}', desc: 'Full name of the user' },
+                        { tag: '{{verificationUrl}}', desc: 'Email verification link' },
+                      ],
+                    },
+                    {
+                      key: 'booking_confirmation',
+                      title: 'Booking confirmation email',
+                      description: 'Sent to users after they successfully confirm a booking.',
+                      variables: [
+                        { tag: '{{name}}', desc: 'Full name of the user' },
+                        { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
+                        { tag: '{{date}}', desc: 'Booking date' },
+                        { tag: '{{time}}', desc: 'Booking start time' },
+                      ],
+                    },
+                    {
+                      key: 'booking_reminder',
+                      title: 'Booking reminder email',
+                      description: 'Sent automatically before an upcoming booking. Includes a one-click cancel link.',
+                      variables: [
+                        { tag: '{{name}}', desc: 'Full name of the user' },
+                        { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
+                        { tag: '{{date}}', desc: 'Booking date' },
+                        { tag: '{{time}}', desc: 'Booking start time' },
+                        { tag: '{{cancelUrl}}', desc: 'One-click cancel link (no login required)' },
+                      ],
+                    },
+                  ].map(({ key, title, description, variables }) => {
+                    const tpl = emailTemplates.find((x) => x.key === key);
+                    const body = tpl?.body ?? '';
+                    const subject = tpl?.subject ?? '';
+                    const setBody = (val: string) => setEmailTemplates((prev) => {
+                      const copy = [...prev];
+                      const idx = copy.findIndex((x) => x.key === key);
+                      if (idx >= 0) copy[idx] = { ...copy[idx], body: val };
+                      else copy.push({ key, subject: null, body: val });
+                      return copy;
+                    });
+                    const setSubject = (val: string) => setEmailTemplates((prev) => {
+                      const copy = [...prev];
+                      const idx = copy.findIndex((x) => x.key === key);
+                      if (idx >= 0) copy[idx] = { ...copy[idx], subject: val };
+                      else copy.push({ key, subject: val, body: '' });
+                      return copy;
+                    });
 
-                  <Card>
-                    <div className="mb-6">
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Mail</h3>
-                      <p className="text-sm text-gray-600">
-                        Customize email templates sent to users. You can use placeholders like
-                        <span> {'{{name}}'}, {'{{amenity}}'}, {'{{date}}'}, {'{{time}}'} </span>
-                        where applicable.
-                      </p>
-                    </div>
-                    <div className="space-y-6">
-                      {[
-                        { key: 'registration', title: 'User registration email', description: 'This email is sent to users after they register to verify their email address.' },
-                        { key: 'booking_confirmation', title: 'Booking confirmation email', description: 'This email is sent to users after they successfully confirm a booking.' },
-                      ].map(({ key, title, description }) => {
-                        const t = emailTemplates.find((x) => x.key === key) || { key, body: '' };
-                        return (
-                          <div key={key}>
-                            <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
-                            <p className="text-sm text-gray-600 mb-3">{description}</p>
-                            <textarea
-                              className="w-full min-h-[200px] rounded-md border border-gray-300 p-3 text-sm"
-                              value={t.body}
-                              onChange={(e) => setEmailTemplates((prev) => {
-                                const copy = [...prev];
-                                const idx = copy.findIndex((x) => x.key === key);
-                                if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
-                                else copy.push({ key, body: e.target.value });
-                                return copy;
-                              })}
-                            />
-                            <div className="mt-3 flex justify-end">
-                              <Button onClick={async () => {
-                                try {
-                                  const body = emailTemplates.find((x) => x.key === key)?.body ?? '';
-                                  await api.put(`/admin/email-templates/${key}`, { body });
-                                  setNotification({ type: 'success', message: 'Template saved' });
-                                } catch (e: any) {
-                                  setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
-                                }
-                              }}>Save</Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Card>
+                    const insertTag = (before: string, after: string, textareaId: string) => {
+                      const el = document.getElementById(textareaId) as HTMLTextAreaElement | null;
+                      if (!el) return;
+                      const start = el.selectionStart ?? 0;
+                      const end = el.selectionEnd ?? 0;
+                      const selected = body.slice(start, end) || 'text';
+                      const next = body.slice(0, start) + before + selected + after + body.slice(end);
+                      setBody(next);
+                      requestAnimationFrame(() => {
+                        el.focus();
+                        el.setSelectionRange(start + before.length, start + before.length + selected.length);
+                      });
+                    };
+
+                    const taId = `tpl-${key}`;
+
+                    return (
+                      <Card key={key}>
+                        <h3 className="text-base font-medium text-gray-900 mb-1">{title}</h3>
+                        <p className="text-sm text-gray-600 mb-4">{description}</p>
+
+                        {/* Subject line */}
+                        <div className="mb-4">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
+                          <input
+                            type="text"
+                            className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                            placeholder="Email subject…"
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                          />
+                          <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are supported in the subject.</p>
+                        </div>
+
+                        {/* Variable legend */}
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {variables.map(({ tag, desc }) => (
+                            <span key={tag} className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded" title={desc}>
+                              <code className="font-mono text-primary-700">{tag}</code>
+                              <span className="text-gray-500">{desc}</span>
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Formatting toolbar */}
+                        <div className="flex flex-wrap gap-1 mb-1 p-1.5 bg-gray-50 border border-gray-200 rounded-t-md border-b-0">
+                          {[
+                            { label: 'B', title: 'Bold', before: '<strong>', after: '</strong>', className: 'font-bold' },
+                            { label: 'I', title: 'Italic', before: '<em>', after: '</em>', className: 'italic' },
+                            { label: 'H1', title: 'Heading 1', before: '<h1>', after: '</h1>', className: '' },
+                            { label: 'H2', title: 'Heading 2', before: '<h2>', after: '</h2>', className: '' },
+                            { label: '⊞', title: 'Center', before: '<div style="text-align:center">', after: '</div>', className: '' },
+                          ].map(({ label, title, before, after, className }) => (
+                            <button
+                              key={label}
+                              type="button"
+                              title={title}
+                              onClick={() => insertTag(before, after, taId)}
+                              className={`px-2.5 py-1 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 ${className}`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                          <span className="ml-auto text-xs text-gray-400 self-center pr-1">HTML is saved and rendered in email</span>
+                        </div>
+
+                        <textarea
+                          id={taId}
+                          className="w-full min-h-[220px] rounded-b-md rounded-t-none border border-gray-300 p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          value={body}
+                          onChange={(e) => setBody(e.target.value)}
+                          spellCheck={false}
+                        />
+
+                        <div className="mt-3 flex justify-end">
+                          <Button onClick={async () => {
+                            try {
+                              await api.put(`/admin/email-templates/${key}`, { body, subject });
+                              setNotification({ type: 'success', message: 'Template saved' });
+                            } catch (e: any) {
+                              setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
+                            }
+                          }}>Save</Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </div>

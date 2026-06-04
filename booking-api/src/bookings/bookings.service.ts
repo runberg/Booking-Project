@@ -1,7 +1,8 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, SelectQueryBuilder } from 'typeorm';
+import { Repository, Between, SelectQueryBuilder, IsNull } from 'typeorm';
 import { Booking } from './booking.entity';
+import { BookingCancelToken } from './booking-cancel-token.entity';
 import { AmenitiesService } from '../amenities/amenities.service';
 import { UsersService } from '../users/users.service';
 import { BookingLog } from './booking-log.entity';
@@ -42,6 +43,8 @@ export class BookingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Booking)
     private bookingsRepo: Repository<Booking>,
+    @InjectRepository(BookingCancelToken)
+    private cancelTokenRepo: Repository<BookingCancelToken>,
     private amenitiesService: AmenitiesService,
     private usersService: UsersService,
     @InjectRepository(BookingLog)
@@ -262,6 +265,84 @@ export class BookingsService implements OnModuleInit {
         nextBooking: amenityNext ? toBookingInfo(amenityNext) : null,
       };
     });
+  }
+
+  // ── Reminder helpers ─────────────────────────────────────────────────────
+
+  async findUnremindedUpcoming(): Promise<Booking[]> {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    return this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.reminderSentAt IS NULL')
+      .andWhere('b.date >= :today', { today: todayStr })
+      .getMany();
+  }
+
+  async markReminderSent(bookingId: string): Promise<void> {
+    await this.bookingsRepo.update(bookingId, { reminderSentAt: new Date() });
+  }
+
+  // ── Cancel token ─────────────────────────────────────────────────────────
+
+  async createCancelToken(bookingId: string, expiresAt: Date): Promise<string> {
+    const { randomBytes } = await import('crypto');
+    const token = randomBytes(32).toString('hex');
+    await this.cancelTokenRepo.save(
+      this.cancelTokenRepo.create({ bookingId, token, expiresAt }),
+    );
+    return token;
+  }
+
+  async previewCancelToken(token: string): Promise<{
+    amenityName: string;
+    date: string;
+    startTime: string;
+    slotLength: number;
+    userName: string;
+  } | null> {
+    const cancelToken = await this.cancelTokenRepo.findOne({
+      where: { token, usedAt: IsNull() },
+    });
+    if (!cancelToken || cancelToken.expiresAt < new Date()) return null;
+
+    const booking = await this.bookingsRepo.findOne({
+      where: { id: cancelToken.bookingId },
+    });
+    if (!booking) return null;
+
+    const [user, amenity] = await Promise.all([
+      this.usersService.findById(booking.userId),
+      this.amenitiesService.findOne(booking.amenityId),
+    ]);
+
+    return {
+      amenityName: amenity?.name ?? 'Amenity',
+      date: booking.date,
+      startTime: booking.startTime,
+      slotLength: booking.slotLength,
+      userName: user?.name ?? '',
+    };
+  }
+
+  async cancelByToken(token: string): Promise<{ ok: boolean; message: string }> {
+    const cancelToken = await this.cancelTokenRepo.findOne({
+      where: { token, usedAt: IsNull() },
+    });
+    if (!cancelToken) return { ok: false, message: 'Invalid or already used link.' };
+    if (cancelToken.expiresAt < new Date()) return { ok: false, message: 'This cancel link has expired.' };
+
+    const booking = await this.bookingsRepo.findOne({
+      where: { id: cancelToken.bookingId },
+    });
+    if (!booking) return { ok: false, message: 'Booking not found.' };
+
+    await this.bookingsRepo.delete(booking.id);
+    await this.cancelTokenRepo.update(cancelToken.id, { usedAt: new Date() });
+    await this.writeLog('delete', booking);
+
+    return { ok: true, message: 'Your booking has been cancelled.' };
   }
 
   private async writeLog(action: 'create' | 'delete', b: Booking, ipAddress?: string) {

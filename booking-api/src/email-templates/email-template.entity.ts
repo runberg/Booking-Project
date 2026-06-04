@@ -14,7 +14,10 @@ export class EmailTemplate {
   id: string;
 
   @Column('text')
-  key: string; // e.g., 'registration', 'booking_confirmation'
+  key: string;
+
+  @Column({ type: 'text', nullable: true })
+  subject: string | null;
 
   @Column('text')
   body: string;

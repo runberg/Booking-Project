@@ -150,12 +150,24 @@ export class EmailService {
 
   async sendTemplateEmail(
     email: string,
-    subject: string,
+    fallbackSubject: string,
     key: string,
     variables: Record<string, string>,
   ): Promise<void> {
     const tpl = await this.templates.getByKey(key);
-    const body = this.renderTemplateBody(tpl?.body || '', variables);
-    return this.sendGenericEmail(email, subject, body.replace(/\n/g, '<br/>'));
+    // Variable values are HTML-escaped inside renderTemplateBody.
+    // The template body is stored as sanitized HTML and passes through
+    // directly — no additional escaping or \n→<br> conversion.
+    const html = this.renderTemplateBody(tpl?.body || '', variables);
+    // Subject may itself contain {{variables}} (e.g. {{amenity}})
+    const rawSubject = tpl?.subject || fallbackSubject;
+    const subject = this.renderTemplateBody(rawSubject, variables);
+    const mailOptions = {
+      from: await this.getFromAddress(),
+      to: email,
+      subject,
+      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${html}</div>`,
+    };
+    await (await this.getTransporter()).sendMail(mailOptions);
   }
 }

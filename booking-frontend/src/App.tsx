@@ -7,6 +7,7 @@ import { BookingPage } from './pages/BookingPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { SecurityPage } from './pages/SecurityPage';
+import { CancelBookingPage } from './pages/CancelBookingPage';
 import { authService } from './services/authService';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -87,6 +88,10 @@ function App() {
           <Route
             path="/verify-email"
             element={<VerifyEmailPage />}
+          />
+          <Route
+            path="/cancel/:token"
+            element={<CancelBookingPage />}
           />
         </Routes>
       </div>
