@@ -369,7 +369,7 @@ export const AmenitiesAdmin: React.FC = () => {
                     ) : (
                       <>
                         <Button variant="secondary" onClick={() => startEdit(a)}>Edit</Button>
-                        <Button variant="secondary" onClick={() => openQrModal(a)} title={a.qrToken ? 'View QR code' : 'No QR code yet'} disabled={!a.qrToken}>QR</Button>
+                        <Button variant="secondary" onClick={() => a.qrToken ? openQrModal(a) : regenerateQr(a)} title={a.qrToken ? 'View QR code' : 'Generate QR code'}>QR</Button>
                         <Button variant="secondary" className="text-red-600 hover:text-red-900" onClick={() => deleteAmenity(a.id)}>Delete</Button>
                       </>
                     )}
