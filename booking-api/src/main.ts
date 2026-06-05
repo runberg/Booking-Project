@@ -1,3 +1,4 @@
+import { types as pgTypes } from 'pg';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
@@ -5,6 +6,12 @@ import {
 } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+
+// pg parses TIMESTAMP WITHOUT TIME ZONE as local time when Node.js has TZ set.
+// With TZ=Asia/Dubai the stored UTC value is shifted 4 hours backward on read.
+// Appending 'Z' forces the parser to always treat the stored value as UTC.
+pgTypes.setTypeParser(1114, (val: string) => new Date(val + 'Z'));
+pgTypes.setTypeParser(1184, (val: string) => new Date(val));
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
