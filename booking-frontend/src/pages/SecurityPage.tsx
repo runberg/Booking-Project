@@ -87,6 +87,55 @@ export const SecurityPage: React.FC = () => {
   const now = currentTime;
   const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
 
+  let mainContent: React.ReactNode;
+  if (isLoading) {
+    mainContent = (
+      <div className="text-center py-16">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto"></div>
+        <p className="mt-3 text-sm text-gray-600">Loading dashboard...</p>
+      </div>
+    );
+  } else if (error) {
+    mainContent = <div className="bg-red-50 border border-red-200 rounded-md p-4 text-sm text-red-700">{error}</div>;
+  } else {
+    mainContent = (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {amenities.map((amenity) => (
+          <div key={amenity.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-3">
+              <h2 className="text-base font-semibold text-white">{amenity.name}</h2>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Current booking</p>
+                {amenity.currentBooking ? (
+                  <BookingCard booking={amenity.currentBooking} />
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
+                    No current booking
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Next booking</p>
+                {amenity.nextBooking ? (
+                  <BookingCard
+                    booking={amenity.nextBooking}
+                    showDate={!isToday(amenity.nextBooking.date)}
+                  />
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-500">
+                    No upcoming bookings
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow">
@@ -107,49 +156,7 @@ export const SecurityPage: React.FC = () => {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {isLoading ? (
-          <div className="text-center py-16">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-3 text-sm text-gray-600">Loading dashboard...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 text-sm text-red-700">{error}</div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {amenities.map((amenity) => (
-              <div key={amenity.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-gray-800 px-4 py-3">
-                  <h2 className="text-base font-semibold text-white">{amenity.name}</h2>
-                </div>
-                <div className="p-4 space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Current booking</p>
-                    {amenity.currentBooking ? (
-                      <BookingCard booking={amenity.currentBooking} />
-                    ) : (
-                      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
-                        No current booking
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Next booking</p>
-                    {amenity.nextBooking ? (
-                      <BookingCard
-                        booking={amenity.nextBooking}
-                        showDate={!isToday(amenity.nextBooking.date)}
-                      />
-                    ) : (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-500">
-                        No upcoming bookings
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {mainContent}
       </div>
     </div>
   );

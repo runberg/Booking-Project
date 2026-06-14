@@ -24,6 +24,13 @@ const registerSchema = yup.object({
   apartmentNumber: yup.string().min(1, 'Apartment number is required').required('Apartment number is required'),
 });
 
+function getUnitPlaceholder(selectedBuildingId: string | undefined, isLoadingUnits: boolean): string {
+  if (selectedBuildingId) {
+    return isLoadingUnits ? 'Loading units...' : 'Select apartment number';
+  }
+  return 'Select a building first';
+}
+
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -179,8 +186,9 @@ export const RegisterPage: React.FC = () => {
                 )}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Your message</label>
+                    <label htmlFor="contact-message" className="block text-sm font-medium text-gray-700 mb-1">Your message</label>
                     <textarea
+                      id="contact-message"
                       className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[120px]"
                       placeholder="Describe your situation..."
                       value={contactData.message}
@@ -253,10 +261,11 @@ export const RegisterPage: React.FC = () => {
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="reg-building" className="block text-sm font-medium text-gray-700 mb-1">
                 Building <span className="text-red-500">*</span>
               </label>
               <select
+                id="reg-building"
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 disabled={isLoadingBuildings}
                 defaultValue=""
@@ -275,10 +284,11 @@ export const RegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="reg-apartment" className="block text-sm font-medium text-gray-700 mb-1">
                 Apartment Number <span className="text-red-500">*</span>
               </label>
               <select
+                id="reg-apartment"
                 key={selectedBuildingId}
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:text-gray-500"
                 disabled={!selectedBuildingId || isLoadingUnits}
@@ -286,11 +296,7 @@ export const RegisterPage: React.FC = () => {
                 onChange={handleUnitChange}
               >
                 <option value="" disabled>
-                  {!selectedBuildingId
-                    ? 'Select a building first'
-                    : isLoadingUnits
-                    ? 'Loading units...'
-                    : 'Select apartment number'}
+                  {getUnitPlaceholder(selectedBuildingId, isLoadingUnits)}
                 </option>
                 {units.map((u) => (
                   <option key={u} value={u}>{u}</option>

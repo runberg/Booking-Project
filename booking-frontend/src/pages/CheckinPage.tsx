@@ -23,6 +23,7 @@ type PageContent = {
 type Stage = 'loading' | 'ready' | 'scanning' | 'success' | 'mismatch' | 'error';
 
 const SCANNER_ID = 'qr-checkin-scanner';
+const noop = () => {};
 
 export const CheckinPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
@@ -78,7 +79,7 @@ export const CheckinPage: React.FC = () => {
           { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 250, height: 250 } },
           (text) => {
-            scanner.stop().catch(() => {});
+            scanner.stop().catch(noop);
             scannerStarted.current = false;
             handleScanned(text.trim());
           },
@@ -108,7 +109,9 @@ export const CheckinPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, qrToken }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        setStage('success');
+      } else {
         const d = await res.json().catch(() => ({}));
         if (d.message?.toLowerCase().includes('match')) {
           setStage('mismatch');
@@ -116,8 +119,6 @@ export const CheckinPage: React.FC = () => {
           setErrorMsg(d.message || 'Check-in failed.');
           setStage('error');
         }
-      } else {
-        setStage('success');
       }
     } catch {
       setErrorMsg('Network error. Please try again.');

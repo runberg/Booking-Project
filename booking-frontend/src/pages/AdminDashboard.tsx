@@ -44,6 +44,45 @@ const ROLE_BADGE_CLASSES: Record<string, string> = {
   user: 'bg-blue-100 text-blue-800',
 };
 
+type UserSortKey = 'name' | 'email' | 'building' | 'role' | 'isEmailVerified' | 'createdAt';
+
+function compareUsersBy(a: User, b: User, key: UserSortKey): number {
+  switch (key) {
+    case 'name': return (a.name || '').localeCompare(b.name || '');
+    case 'email': return (a.email || '').localeCompare(b.email || '');
+    case 'building': return `${a.building || ''} ${a.apartmentNumber || ''}`.localeCompare(`${b.building || ''} ${b.apartmentNumber || ''}`);
+    case 'role': return (a.role || '').localeCompare(b.role || '');
+    case 'isEmailVerified': return Number(a.isEmailVerified) - Number(b.isEmailVerified);
+    case 'createdAt': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    default: return 0;
+  }
+}
+
+function userMatchesQuery(u: User, q: string): boolean {
+  if (!q) return true;
+  return (
+    (u.name || '').toLowerCase().includes(q) ||
+    (u.email || '').toLowerCase().includes(q) ||
+    (u.building || '').toLowerCase().includes(q) ||
+    (u.apartmentNumber || '').toLowerCase().includes(q) ||
+    (u.role || '').toLowerCase().includes(q) ||
+    (u.isEmailVerified ? 'verified' : 'pending').includes(q)
+  );
+}
+
+type EmailTemplate = { key: string; subject: string | null; body: string };
+
+function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: string; subject?: string }): EmailTemplate[] {
+  const copy = [...prev];
+  const idx = copy.findIndex((x) => x.key === patch.key);
+  if (idx >= 0) {
+    copy[idx] = { ...copy[idx], ...patch };
+  } else {
+    copy.push({ key: patch.key, subject: patch.subject ?? null, body: patch.body ?? '' });
+  }
+  return copy;
+}
+
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
@@ -458,6 +497,363 @@ export const AdminDashboard: React.FC = () => {
     ...(isAdmin ? [{ key: 'settings' as typeof activeTab, label: 'Settings' }] : []),
   ];
 
+  const changeUserRole = async (userId: string, targetRole: string, successMsg: string) => {
+    try {
+      await api.post(`/admin/users/${userId}/role`, { role: targetRole });
+      setNotification({ type: 'success', message: successMsg });
+      fetchUsers();
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to change role' });
+    }
+  };
+
+  const renderRoleButton = (user: User) => {
+    if (user.role === 'super') {
+      return (
+        <Button variant="secondary" onClick={() => changeUserRole(user.id, 'user', `Removed Super from ${user.name}`)}>
+          Remove Super
+        </Button>
+      );
+    }
+    if (user.role === 'security') {
+      return (
+        <Button variant="secondary" onClick={() => changeUserRole(user.id, 'user', `Removed Security from ${user.name}`)}>
+          Remove Security
+        </Button>
+      );
+    }
+    return (
+      <Button variant="secondary" onClick={() => changeUserRole(user.id, 'super', `Promoted ${user.name} to Super`)}>
+        Make Super
+      </Button>
+    );
+  };
+
+  const renderBuildingsContent = () => {
+    if (isLoadingBuildings) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-2 text-sm text-gray-600">Loading buildings...</p>
+        </div>
+      );
+    }
+    if (buildings.length === 0) {
+      return <p className="text-sm text-gray-600">No buildings yet. Add one above.</p>;
+    }
+    return (
+      <div className="space-y-3">
+        {buildings.map((b) => (
+          <div key={b.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            {/* Building header row */}
+            <div className="flex flex-wrap items-center gap-3 p-4">
+              {editingBuilding?.id === b.id ? (
+                <input
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  className="flex-1 min-w-0 rounded-md border border-gray-300 py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              ) : (
+                <span className="font-medium text-gray-900 flex-1 min-w-0">{b.name}</span>
+              )}
+
+              {editingBuilding?.id === b.id ? (
+                <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingActive}
+                    onChange={(e) => setEditingActive(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span>Active</span>
+                </label>
+              ) : (
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${b.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                  {b.isActive ? 'Active' : 'Inactive'}
+                </span>
+              )}
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {editingBuilding?.id === b.id ? (
+                  <>
+                    <Button variant="secondary" className="text-xs px-3 py-1.5" onClick={() => setEditingBuilding(null)}>Cancel</Button>
+                    <Button className="text-xs px-3 py-1.5" onClick={saveBuilding}>Save</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="secondary" className="text-xs px-3 py-1.5" onClick={() => startEditBuilding(b)}>Edit</Button>
+                    <Button variant="secondary" className="text-xs px-3 py-1.5 text-red-600 hover:text-red-900" onClick={() => deleteBuilding(b.id)}>Delete</Button>
+                  </>
+                )}
+                <button
+                  className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 font-medium px-2 py-1.5 rounded border border-primary-200 hover:border-primary-400 transition-colors"
+                  onClick={() => toggleBuildingUnits(b.id)}
+                >
+                  Units
+                  {expandedBuildingId === b.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Expanded units section */}
+            {expandedBuildingId === b.id && (
+              <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-3">
+                {isLoadingUnits[b.id] ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                    Loading units...
+                  </div>
+                ) : (
+                  <>
+                    {buildingUnits[b.id]?.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Current units ({buildingUnits[b.id].length})</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {buildingUnits[b.id].sort().map((u) => (
+                            <span key={u} className="inline-flex px-2 py-0.5 text-xs bg-white border border-gray-300 rounded text-gray-700">{u}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No units added yet. This building cannot be activated until units are added.</p>
+                    )}
+                    <div>
+                      <label htmlFor={`units-input-${b.id}`} className="block text-xs font-medium text-gray-700 mb-1">
+                        Replace units — paste numbers separated by newlines or commas
+                      </label>
+                      <textarea
+                        id={`units-input-${b.id}`}
+                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px] font-mono"
+                        placeholder={'101\n102\n103\n201\n202'}
+                        value={unitInputs[b.id] ?? ''}
+                        onChange={(e) => setUnitInputs((s) => ({ ...s, [b.id]: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        className="text-sm"
+                        disabled={isSavingUnits[b.id]}
+                        onClick={() => saveUnits(b.id)}
+                      >
+                        {isSavingUnits[b.id] ? 'Saving...' : 'Save Units'}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderEmailsContent = () => {
+    if (isLoadingEmails) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-2 text-sm text-gray-600">Loading templates...</p>
+        </div>
+      );
+    }
+    if (contentSubTab === 'rules') {
+      return (
+        <Card>
+          <div className="mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">Rules and Regulations</h3>
+            <p className="text-sm text-gray-600">Legal texts shown to users during registration and booking. Plain text only.</p>
+          </div>
+          <div className="space-y-6">
+            {[
+              {
+                key: 'registration_legal_text',
+                title: 'Registration Legal Text',
+                description: 'Shown above the "Create account" button on the registration page.',
+                defaultBody: 'Legal note - Account creation',
+              },
+              {
+                key: 'booking_legal_text',
+                title: 'Booking Confirmation Legal Text',
+                description: 'Shown above the "Confirm booking" button when confirming a booking.',
+                defaultBody: 'Legal note - Booking confirmation',
+              },
+              {
+                key: 'cancel_page_confirm_text',
+                title: 'Cancellation page — confirmation text',
+                description: 'Shown on the cancel booking page before the user confirms cancellation.',
+                defaultBody: 'Are you sure you want to cancel this booking? This will free the slot for other residents.',
+              },
+              {
+                key: 'cancel_page_success_text',
+                title: 'Cancellation page — success message',
+                description: 'Shown after a booking has been successfully cancelled.',
+                defaultBody: 'Your booking has been cancelled and the slot is now available for others.',
+              },
+              {
+                key: 'checkin_page_instructions',
+                title: 'Check-in page — instructions',
+                description: 'Shown on the check-in page before the user scans the QR code.',
+                defaultBody: 'Point your camera at the QR code posted at the amenity to confirm your attendance.',
+              },
+              {
+                key: 'checkin_success_text',
+                title: 'Check-in page — success message',
+                description: 'Shown after a successful QR scan.',
+                defaultBody: 'You have successfully checked in. Enjoy your booking!',
+              },
+              {
+                key: 'checkin_mismatch_text',
+                title: 'Check-in page — mismatch message',
+                description: 'Shown when the scanned QR code does not match the booked amenity.',
+                defaultBody: 'The QR code does not match your booked amenity. Please make sure you are at the correct location.',
+              },
+            ].map(({ key, title, description, defaultBody }) => (
+              <div key={key}>
+                <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
+                <p className="text-sm text-gray-600 mb-2">{description}</p>
+                <textarea
+                  className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm font-mono"
+                  value={emailTemplates.find((x) => x.key === key)?.body || defaultBody}
+                  onChange={(e) => setEmailTemplates((prev) => patchEmailTemplate(prev, { key, body: e.target.value }))}
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button onClick={async () => {
+                    try {
+                      const body = emailTemplates.find((x) => x.key === key)?.body ?? defaultBody;
+                      await api.put(`/admin/email-templates/${key}`, { body });
+                      setNotification({ type: 'success', message: 'Legal text saved' });
+                    } catch (e: any) {
+                      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
+                    }
+                  }}>Save</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      );
+    }
+    return (
+      <div className="space-y-6">
+        {[
+          {
+            key: 'registration',
+            title: 'Registration email',
+            description: 'Sent to users after they register to verify their email address.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{verificationUrl}}', desc: 'Email verification link' },
+            ],
+          },
+          {
+            key: 'booking_confirmation',
+            title: 'Booking confirmation email',
+            description: 'Sent to users after they successfully confirm a booking.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
+              { tag: '{{date}}', desc: 'Booking date' },
+              { tag: '{{time}}', desc: 'Booking start time' },
+            ],
+          },
+          {
+            key: 'booking_reminder',
+            title: 'Booking reminder email',
+            description: 'Sent automatically before an upcoming booking. Includes a one-click cancel link.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
+              { tag: '{{date}}', desc: 'Booking date' },
+              { tag: '{{time}}', desc: 'Booking start time' },
+              { tag: '{{cancelUrl}}', desc: 'One-click cancel link (no login required)' },
+            ],
+          },
+          {
+            key: 'booking_checkin',
+            title: 'Check-in email',
+            description: 'Sent shortly before the booking starts. Includes a link to open the QR scanner.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
+              { tag: '{{date}}', desc: 'Booking date' },
+              { tag: '{{time}}', desc: 'Booking start time' },
+              { tag: '{{checkinUrl}}', desc: 'Link to open the QR check-in page' },
+            ],
+          },
+        ].map(({ key, title, description, variables }) => {
+          const tpl = emailTemplates.find((x) => x.key === key);
+          const subject = tpl?.subject ?? '';
+          const setSubject = (val: string) => setEmailTemplates((prev) => patchEmailTemplate(prev, { key, subject: val }));
+
+          return (
+            <Card key={key}>
+              <h3 className="text-base font-medium text-gray-900 mb-1">{title}</h3>
+              <p className="text-sm text-gray-600 mb-4">{description}</p>
+
+              {key === 'booking_reminder' && (
+                <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  <label htmlFor="timing-reminder-hours" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+                  <input id="timing-reminder-hours" type="number" min={1} max={168} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)} />
+                  <span className="text-sm text-amber-900">hours before the booking</span>
+                  <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
+                    try { await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
+                    catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
+                  }}>Save</button>
+                </div>
+              )}
+              {key === 'booking_checkin' && (
+                <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  <label htmlFor="timing-checkin-minutes" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+                  <input id="timing-checkin-minutes" type="number" min={0} max={120} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)} />
+                  <span className="text-sm text-amber-900">minutes before the booking</span>
+                  <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
+                    try { await api.put('/admin/settings/reminder', { checkin_minutes_before: checkinMinutesBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
+                    catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
+                  }}>Save</button>
+                  <p className="w-full text-xs text-amber-700 mt-1">Note: exact send time depends on the scheduler interval (default every 10 min).</p>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label htmlFor={`subject-${key}`} className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
+                <input
+                  id={`subject-${key}`}
+                  type="text"
+                  className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                  placeholder="Email subject…"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are also supported in the subject.</p>
+              </div>
+
+              <RichEmailEditor
+                initialValue={tpl?.body ?? ''}
+                variables={variables.map(v => ({ tag: v.tag, label: v.desc.split(' ').slice(0, 2).join(' ') }))}
+                showCancelButton={key === 'booking_reminder'}
+                onMount={(el) => { editorDomRefs.current[key] = el; }}
+              />
+
+              <div className="mt-3 flex justify-end">
+                <Button onClick={async () => {
+                  try {
+                    const body = editorDomRefs.current[key]?.innerHTML ?? '';
+                    await api.put(`/admin/email-templates/${key}`, { body, subject });
+                    setNotification({ type: 'success', message: 'Template saved' });
+                  } catch (e: any) {
+                    setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
+                  }
+                }}>Save</Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {notification && (
@@ -684,33 +1080,8 @@ export const AdminDashboard: React.FC = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {users
-                        .filter((u) => {
-                          const q = usersQuery.trim().toLowerCase();
-                          if (!q) return true;
-                          return (
-                            (u.name || '').toLowerCase().includes(q) ||
-                            (u.email || '').toLowerCase().includes(q) ||
-                            (u.building || '').toLowerCase().includes(q) ||
-                            (u.apartmentNumber || '').toLowerCase().includes(q) ||
-                            (u.role || '').toLowerCase().includes(q) ||
-                            (u.isEmailVerified ? 'verified' : 'pending').includes(q)
-                          );
-                        })
-                        .sort((a, b) => {
-                          const dir = usersSortDir === 'ASC' ? 1 : -1;
-                          const val = (key: typeof usersSortBy) => {
-                            switch (key) {
-                              case 'name': return (a.name || '').localeCompare(b.name || '');
-                              case 'email': return (a.email || '').localeCompare(b.email || '');
-                              case 'building': return `${a.building || ''} ${a.apartmentNumber || ''}`.localeCompare(`${b.building || ''} ${b.apartmentNumber || ''}`);
-                              case 'role': return (a.role || '').localeCompare(b.role || '');
-                              case 'isEmailVerified': return Number(a.isEmailVerified) - Number(b.isEmailVerified);
-                              case 'createdAt': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-                              default: return 0;
-                            }
-                          };
-                          return dir * val(usersSortBy);
-                        })
+                        .filter((u) => userMatchesQuery(u, usersQuery.trim().toLowerCase()))
+                        .sort((a, b) => (usersSortDir === 'ASC' ? 1 : -1) * compareUsersBy(a, b, usersSortBy))
                         .map((user) => (
                           <tr key={user.id}>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
@@ -752,39 +1123,7 @@ export const AdminDashboard: React.FC = () => {
                                     <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </Button>
                                 )}
-                                {currentUser?.role === 'admin' && user.role !== 'admin' && (
-                                  user.role === 'super' ? (
-                                    <Button variant="secondary" onClick={async () => {
-                                      try {
-                                        await api.post(`/admin/users/${user.id}/role`, { role: 'user' });
-                                        setNotification({ type: 'success', message: `Removed Super from ${user.name}` });
-                                        fetchUsers();
-                                      } catch (e: any) {
-                                        setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to change role' });
-                                      }
-                                    }}>Remove Super</Button>
-                                  ) : user.role === 'security' ? (
-                                    <Button variant="secondary" onClick={async () => {
-                                      try {
-                                        await api.post(`/admin/users/${user.id}/role`, { role: 'user' });
-                                        setNotification({ type: 'success', message: `Removed Security from ${user.name}` });
-                                        fetchUsers();
-                                      } catch (e: any) {
-                                        setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to change role' });
-                                      }
-                                    }}>Remove Security</Button>
-                                  ) : (
-                                    <Button variant="secondary" onClick={async () => {
-                                      try {
-                                        await api.post(`/admin/users/${user.id}/role`, { role: 'super' });
-                                        setNotification({ type: 'success', message: `Promoted ${user.name} to Super` });
-                                        fetchUsers();
-                                      } catch (e: any) {
-                                        setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to change role' });
-                                      }
-                                    }}>Make Super</Button>
-                                  )
-                                )}
+                                {currentUser?.role === 'admin' && user.role !== 'admin' && renderRoleButton(user)}
                               </div>
                             </td>
                           </tr>
@@ -818,118 +1157,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {isLoadingBuildings ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-                  <p className="mt-2 text-sm text-gray-600">Loading buildings...</p>
-                </div>
-              ) : buildings.length === 0 ? (
-                <p className="text-sm text-gray-600">No buildings yet. Add one above.</p>
-              ) : (
-                <div className="space-y-3">
-                  {buildings.map((b) => (
-                    <div key={b.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Building header row */}
-                      <div className="flex flex-wrap items-center gap-3 p-4">
-                        {editingBuilding?.id === b.id ? (
-                          <input
-                            type="text"
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            className="flex-1 min-w-0 rounded-md border border-gray-300 py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          />
-                        ) : (
-                          <span className="font-medium text-gray-900 flex-1 min-w-0">{b.name}</span>
-                        )}
-
-                        {editingBuilding?.id === b.id ? (
-                          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editingActive}
-                              onChange={(e) => setEditingActive(e.target.checked)}
-                              className="rounded"
-                            />
-                            Active
-                          </label>
-                        ) : (
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${b.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                            {b.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        )}
-
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {editingBuilding?.id === b.id ? (
-                            <>
-                              <Button variant="secondary" className="text-xs px-3 py-1.5" onClick={() => setEditingBuilding(null)}>Cancel</Button>
-                              <Button className="text-xs px-3 py-1.5" onClick={saveBuilding}>Save</Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button variant="secondary" className="text-xs px-3 py-1.5" onClick={() => startEditBuilding(b)}>Edit</Button>
-                              <Button variant="secondary" className="text-xs px-3 py-1.5 text-red-600 hover:text-red-900" onClick={() => deleteBuilding(b.id)}>Delete</Button>
-                            </>
-                          )}
-                          <button
-                            className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 font-medium px-2 py-1.5 rounded border border-primary-200 hover:border-primary-400 transition-colors"
-                            onClick={() => toggleBuildingUnits(b.id)}
-                          >
-                            Units
-                            {expandedBuildingId === b.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Expanded units section */}
-                      {expandedBuildingId === b.id && (
-                        <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-3">
-                          {isLoadingUnits[b.id] ? (
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                              Loading units...
-                            </div>
-                          ) : (
-                            <>
-                              {buildingUnits[b.id]?.length > 0 ? (
-                                <div>
-                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Current units ({buildingUnits[b.id].length})</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {buildingUnits[b.id].sort().map((u) => (
-                                      <span key={u} className="inline-flex px-2 py-0.5 text-xs bg-white border border-gray-300 rounded text-gray-700">{u}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-gray-500">No units added yet. This building cannot be activated until units are added.</p>
-                              )}
-                              <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
-                                  Replace units — paste numbers separated by newlines or commas
-                                </label>
-                                <textarea
-                                  className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px] font-mono"
-                                  placeholder={'101\n102\n103\n201\n202'}
-                                  value={unitInputs[b.id] ?? ''}
-                                  onChange={(e) => setUnitInputs((s) => ({ ...s, [b.id]: e.target.value }))}
-                                />
-                              </div>
-                              <div className="flex justify-end">
-                                <Button
-                                  className="text-sm"
-                                  disabled={isSavingUnits[b.id]}
-                                  onClick={() => saveUnits(b.id)}
-                                >
-                                  {isSavingUnits[b.id] ? 'Saving...' : 'Save Units'}
-                                </Button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              {renderBuildingsContent()}
             </div>
           )}
 
@@ -967,217 +1195,7 @@ export const AdminDashboard: React.FC = () => {
                 ))}
               </div>
 
-              {isLoadingEmails ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-                  <p className="mt-2 text-sm text-gray-600">Loading templates...</p>
-                </div>
-              ) : contentSubTab === 'rules' ? (
-                <Card>
-                  <div className="mb-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">Rules and Regulations</h3>
-                    <p className="text-sm text-gray-600">Legal texts shown to users during registration and booking. Plain text only.</p>
-                  </div>
-                  <div className="space-y-6">
-                    {[
-                      {
-                        key: 'registration_legal_text',
-                        title: 'Registration Legal Text',
-                        description: 'Shown above the "Create account" button on the registration page.',
-                        defaultBody: 'Legal note - Account creation',
-                      },
-                      {
-                        key: 'booking_legal_text',
-                        title: 'Booking Confirmation Legal Text',
-                        description: 'Shown above the "Confirm booking" button when confirming a booking.',
-                        defaultBody: 'Legal note - Booking confirmation',
-                      },
-                      {
-                        key: 'cancel_page_confirm_text',
-                        title: 'Cancellation page — confirmation text',
-                        description: 'Shown on the cancel booking page before the user confirms cancellation.',
-                        defaultBody: 'Are you sure you want to cancel this booking? This will free the slot for other residents.',
-                      },
-                      {
-                        key: 'cancel_page_success_text',
-                        title: 'Cancellation page — success message',
-                        description: 'Shown after a booking has been successfully cancelled.',
-                        defaultBody: 'Your booking has been cancelled and the slot is now available for others.',
-                      },
-                      {
-                        key: 'checkin_page_instructions',
-                        title: 'Check-in page — instructions',
-                        description: 'Shown on the check-in page before the user scans the QR code.',
-                        defaultBody: 'Point your camera at the QR code posted at the amenity to confirm your attendance.',
-                      },
-                      {
-                        key: 'checkin_success_text',
-                        title: 'Check-in page — success message',
-                        description: 'Shown after a successful QR scan.',
-                        defaultBody: 'You have successfully checked in. Enjoy your booking!',
-                      },
-                      {
-                        key: 'checkin_mismatch_text',
-                        title: 'Check-in page — mismatch message',
-                        description: 'Shown when the scanned QR code does not match the booked amenity.',
-                        defaultBody: 'The QR code does not match your booked amenity. Please make sure you are at the correct location.',
-                      },
-                    ].map(({ key, title, description, defaultBody }) => (
-                      <div key={key}>
-                        <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
-                        <p className="text-sm text-gray-600 mb-2">{description}</p>
-                        <textarea
-                          className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm font-mono"
-                          value={emailTemplates.find((x) => x.key === key)?.body || defaultBody}
-                          onChange={(e) => setEmailTemplates((prev) => {
-                            const copy = [...prev];
-                            const idx = copy.findIndex((x) => x.key === key);
-                            if (idx >= 0) copy[idx] = { ...copy[idx], body: e.target.value };
-                            else copy.push({ key, body: e.target.value });
-                            return copy;
-                          })}
-                        />
-                        <div className="mt-2 flex justify-end">
-                          <Button onClick={async () => {
-                            try {
-                              const body = emailTemplates.find((x) => x.key === key)?.body ?? defaultBody;
-                              await api.put(`/admin/email-templates/${key}`, { body });
-                              setNotification({ type: 'success', message: 'Legal text saved' });
-                            } catch (e: any) {
-                              setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
-                            }
-                          }}>Save</Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              ) : (
-                <div className="space-y-6">
-                  {[
-                    {
-                      key: 'registration',
-                      title: 'Registration email',
-                      description: 'Sent to users after they register to verify their email address.',
-                      variables: [
-                        { tag: '{{name}}', desc: 'Full name of the user' },
-                        { tag: '{{verificationUrl}}', desc: 'Email verification link' },
-                      ],
-                    },
-                    {
-                      key: 'booking_confirmation',
-                      title: 'Booking confirmation email',
-                      description: 'Sent to users after they successfully confirm a booking.',
-                      variables: [
-                        { tag: '{{name}}', desc: 'Full name of the user' },
-                        { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
-                        { tag: '{{date}}', desc: 'Booking date' },
-                        { tag: '{{time}}', desc: 'Booking start time' },
-                      ],
-                    },
-                    {
-                      key: 'booking_reminder',
-                      title: 'Booking reminder email',
-                      description: 'Sent automatically before an upcoming booking. Includes a one-click cancel link.',
-                      variables: [
-                        { tag: '{{name}}', desc: 'Full name of the user' },
-                        { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
-                        { tag: '{{date}}', desc: 'Booking date' },
-                        { tag: '{{time}}', desc: 'Booking start time' },
-                        { tag: '{{cancelUrl}}', desc: 'One-click cancel link (no login required)' },
-                      ],
-                    },
-                    {
-                      key: 'booking_checkin',
-                      title: 'Check-in email',
-                      description: 'Sent shortly before the booking starts. Includes a link to open the QR scanner.',
-                      variables: [
-                        { tag: '{{name}}', desc: 'Full name of the user' },
-                        { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
-                        { tag: '{{date}}', desc: 'Booking date' },
-                        { tag: '{{time}}', desc: 'Booking start time' },
-                        { tag: '{{checkinUrl}}', desc: 'Link to open the QR check-in page' },
-                      ],
-                    },
-                  ].map(({ key, title, description, variables }) => {
-                    const tpl = emailTemplates.find((x) => x.key === key);
-                    const subject = tpl?.subject ?? '';
-                    const setSubject = (val: string) => setEmailTemplates((prev) => {
-                      const copy = [...prev];
-                      const idx = copy.findIndex((x) => x.key === key);
-                      if (idx >= 0) copy[idx] = { ...copy[idx], subject: val };
-                      else copy.push({ key, subject: val, body: '' });
-                      return copy;
-                    });
-
-                    return (
-                      <Card key={key}>
-                        <h3 className="text-base font-medium text-gray-900 mb-1">{title}</h3>
-                        <p className="text-sm text-gray-600 mb-4">{description}</p>
-
-                        {/* Timing controls */}
-                        {key === 'booking_reminder' && (
-                          <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <label htmlFor="timing-reminder-hours" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-                            <input id="timing-reminder-hours" type="number" min={1} max={168} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)} />
-                            <span className="text-sm text-amber-900">hours before the booking</span>
-                            <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
-                              try { await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
-                              catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
-                            }}>Save</button>
-                          </div>
-                        )}
-                        {key === 'booking_checkin' && (
-                          <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <label htmlFor="timing-checkin-minutes" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-                            <input id="timing-checkin-minutes" type="number" min={0} max={120} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)} />
-                            <span className="text-sm text-amber-900">minutes before the booking</span>
-                            <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
-                              try { await api.put('/admin/settings/reminder', { checkin_minutes_before: checkinMinutesBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
-                              catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
-                            }}>Save</button>
-                            <p className="w-full text-xs text-amber-700 mt-1">Note: exact send time depends on the scheduler interval (default every 10 min).</p>
-                          </div>
-                        )}
-
-                        {/* Subject line */}
-                        <div className="mb-4">
-                          <label htmlFor={`subject-${key}`} className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
-                          <input
-                            id={`subject-${key}`}
-                            type="text"
-                            className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                            placeholder="Email subject…"
-                            value={subject}
-                            onChange={(e) => setSubject(e.target.value)}
-                          />
-                          <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are also supported in the subject.</p>
-                        </div>
-
-                        {/* WYSIWYG editor */}
-                        <RichEmailEditor
-                          initialValue={tpl?.body ?? ''}
-                          variables={variables.map(v => ({ tag: v.tag, label: v.desc.split(' ').slice(0, 2).join(' ') }))}
-                          showCancelButton={key === 'booking_reminder'}
-                          onMount={(el) => { editorDomRefs.current[key] = el; }}
-                        />
-
-                        <div className="mt-3 flex justify-end">
-                          <Button onClick={async () => {
-                            try {
-                              const body = editorDomRefs.current[key]?.innerHTML ?? '';
-                              await api.put(`/admin/email-templates/${key}`, { body, subject });
-                              setNotification({ type: 'success', message: 'Template saved' });
-                            } catch (e: any) {
-                              setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save template' });
-                            }
-                          }}>Save</Button>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
+              {renderEmailsContent()}
             </div>
           )}
 
@@ -1507,7 +1525,7 @@ export const AdminDashboard: React.FC = () => {
                     link.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
                     document.body.appendChild(link);
                     link.click();
-                    document.body.removeChild(link);
+                    link.remove();
                     URL.revokeObjectURL(dlUrl);
                   } catch (e: any) {
                     setNotification({ type: 'error', message: e.message || 'Failed to export CSV' });

@@ -137,6 +137,21 @@ export const AmenitiesAdmin: React.FC = () => {
     }
   };
 
+  const patchEditing = (patch: Partial<Amenity>) => setEditing((s) => ({ ...s, ...patch }));
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError('Image is too large. Max size is 2 MB.');
+      return;
+    }
+    setError('');
+    const reader = new FileReader();
+    reader.onload = () => patchEditing({ imageUrl: reader.result as string });
+    reader.readAsDataURL(file);
+  };
+
   const renderAmenitiesContent = () => {
     if (isLoading) {
       return (
@@ -173,7 +188,7 @@ export const AmenitiesAdmin: React.FC = () => {
                   <div className="flex items-center space-x-3">
                     <img src={a.imageUrl || placeholder} alt="amenity" className="h-10 w-10 rounded object-cover" />
                     {editingId === a.id ? (
-                      <input className="rounded-md border border-gray-300 py-1 px-2" value={editing.name as string} onChange={(e) => setEditing((s) => ({ ...s, name: e.target.value }))} />
+                      <input className="rounded-md border border-gray-300 py-1 px-2" value={editing.name as string} onChange={(e) => patchEditing({ name: e.target.value })} />
                     ) : (
                       <div>
                         <div className="text-sm font-medium text-gray-900">{a.name}</div>
@@ -185,9 +200,9 @@ export const AmenitiesAdmin: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {editingId === a.id ? (
                     <div className="flex items-center space-x-2">
-                      <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.openTime as string) || a.openTime} onChange={(e) => setEditing((s) => ({ ...s, openTime: e.target.value }))} />
+                      <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.openTime as string) || a.openTime} onChange={(e) => patchEditing({ openTime: e.target.value })} />
                       <span>-</span>
-                      <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.closeTime as string) || a.closeTime} onChange={(e) => setEditing((s) => ({ ...s, closeTime: e.target.value }))} />
+                      <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.closeTime as string) || a.closeTime} onChange={(e) => patchEditing({ closeTime: e.target.value })} />
                     </div>
                   ) : (
                     `${a.openTime} - ${a.closeTime}`
@@ -195,7 +210,7 @@ export const AmenitiesAdmin: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {editingId === a.id ? (
-                    <select className="rounded-md border border-gray-300 py-1 px-2" value={(editing.slotLength as number) ?? a.slotLength} onChange={(e) => setEditing((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
+                    <select className="rounded-md border border-gray-300 py-1 px-2" value={(editing.slotLength as number) ?? a.slotLength} onChange={(e) => patchEditing({ slotLength: Number(e.target.value) })}>
                       <option value={30}>30</option>
                       <option value={60}>60</option>
                       <option value={90}>90</option>
@@ -210,7 +225,7 @@ export const AmenitiesAdmin: React.FC = () => {
                     <select
                       className="rounded-md border border-gray-300 py-1 px-2"
                       value={(editing.bookingRestrictionId as string) ?? a.bookingRestrictionId ?? ''}
-                      onChange={(e) => setEditing((s) => ({ ...s, bookingRestrictionId: e.target.value || null }))}
+                      onChange={(e) => patchEditing({ bookingRestrictionId: e.target.value || null })}
                     >
                       <option value="">No restriction</option>
                       {restrictions.map((r) => (
@@ -226,22 +241,11 @@ export const AmenitiesAdmin: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {editingId === a.id ? (
                     <div className="flex items-center space-x-3">
-                      <input type="checkbox" checked={editing.isActive ?? a.isActive} onChange={(e) => setEditing((s) => ({ ...s, isActive: e.target.checked }))} />
+                      <input type="checkbox" checked={editing.isActive ?? a.isActive} onChange={(e) => patchEditing({ isActive: e.target.checked })} />
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          if (file.size > MAX_IMAGE_BYTES) {
-                            setError('Image is too large. Max size is 2 MB.');
-                            return;
-                          }
-                          setError('');
-                          const reader = new FileReader();
-                          reader.onload = () => setEditing((s) => ({ ...s, imageUrl: reader.result as string }));
-                          reader.readAsDataURL(file);
-                        }}
+                        onChange={handleImageChange}
                       />
                     </div>
                   ) : (
@@ -536,7 +540,7 @@ const RestrictionsAdmin: React.FC<{
               <tr key={r.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {editingId === r.id ? (
-                    <input className="rounded-md border border-gray-300 py-1 px-2" value={editing.name ?? r.name} onChange={(e) => setEditing((s) => ({ ...s, name: e.target.value }))} />
+                    <input className="rounded-md border border-gray-300 py-1 px-2" value={editing.name ?? r.name} onChange={(e) => patchEditing({ name: e.target.value })} />
                   ) : (
                     r.name
                   )}
@@ -564,7 +568,7 @@ const RestrictionsAdmin: React.FC<{
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {editingId === r.id ? (
-                    <input type="checkbox" checked={editing.isActive ?? r.isActive} onChange={(e) => setEditing((s) => ({ ...s, isActive: e.target.checked }))} />
+                    <input type="checkbox" checked={editing.isActive ?? r.isActive} onChange={(e) => patchEditing({ isActive: e.target.checked })} />
                   ) : (
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${r.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{r.isActive ? 'Active' : 'Inactive'}</span>
                   )}

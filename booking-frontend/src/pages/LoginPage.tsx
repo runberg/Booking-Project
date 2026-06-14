@@ -24,6 +24,15 @@ type AmenityStatus = {
   availableForDays?: number | null;
 };
 
+function getAvailabilityLabel(a: AmenityStatus): string {
+  if (a.status === 'free' && a.availableForDays) return `Free for ${a.availableForDays} days`;
+  if (a.status === 'free' && a.freeUntil) return `Until ${formatDateTimeDmy(a.freeUntil)}`;
+  if (a.status === 'booked' && a.nextAvailable) return `Next: ${formatDateTimeDmy(a.nextAvailable)}`;
+  if (a.status === 'booked') return 'No slots in window';
+  if (a.nextAvailable) return `Opens ${formatDateTimeDmy(a.nextAvailable)}`;
+  return '';
+}
+
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -161,17 +170,7 @@ export const LoginPage: React.FC = () => {
                     <span className="text-sm font-medium text-gray-900 truncate">{a.name}</span>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-gray-500 text-right max-w-[180px] truncate">
-                        {isFree && a.availableForDays
-                          ? `Free for ${a.availableForDays} days`
-                          : isFree && a.freeUntil
-                          ? `Until ${formatDateTimeDmy(a.freeUntil)}`
-                          : isBooked && a.nextAvailable
-                          ? `Next: ${formatDateTimeDmy(a.nextAvailable)}`
-                          : isBooked
-                          ? 'No slots in window'
-                          : a.nextAvailable
-                          ? `Opens ${formatDateTimeDmy(a.nextAvailable)}`
-                          : ''}
+                        {getAvailabilityLabel(a)}
                       </span>
                       {isFree && (
                         <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded whitespace-nowrap">Free</span>

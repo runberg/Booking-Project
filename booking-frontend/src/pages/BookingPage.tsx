@@ -21,6 +21,63 @@ type AmenityPublic = {
 
 const placeholder = 'https://via.placeholder.com/120x80?text=Amenity';
 
+function dayButtonClass(disabled: boolean, isSelected: boolean): string {
+  if (disabled) return 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50';
+  if (isSelected) return 'border-primary-600 text-primary-700';
+  return 'border-gray-200 text-gray-700 hover:border-gray-300';
+}
+
+type CalendarDay = string | null;
+
+function CalendarGrid({ calendarWeeks, myBookings, selected, selectedDate, setSelectedDate, setSelectedTime, setInfoMessage }: {
+  calendarWeeks: CalendarDay[][];
+  myBookings: Array<{ amenityId: string; date: string }>;
+  selected: AmenityPublic | null;
+  selectedDate: string;
+  setSelectedDate: (date: string) => void;
+  setSelectedTime: (time: string) => void;
+  setInfoMessage: (msg: string) => void;
+}) {
+  return (
+    <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+          <div key={day} className="text-center">{day}</div>
+        ))}
+      </div>
+      <div className="space-y-1 sm:space-y-2">
+        {calendarWeeks.map((week, wi) => (
+          <div key={week.find((d) => d !== null) ?? `week-${wi}`} className="grid grid-cols-7 gap-1 sm:gap-2">
+            {week.map((d, di) => {
+              if (!d) return <div key={`empty-${wi}-${di}`} className="py-2 text-xs text-center text-gray-300 border border-transparent">—</div>;
+              const dayBookingsCount = myBookings.filter((b) => b.amenityId === (selected?.id || '') && b.date === d).length;
+              const dayDisabled = selected?.maxPerDay != null && dayBookingsCount >= (selected?.maxPerDay || 0);
+              const handleDayClick = () => {
+                if (dayDisabled) {
+                  setInfoMessage('You have already made a booking this day');
+                  return;
+                }
+                setSelectedDate(d);
+                setSelectedTime('');
+              };
+              return (
+                <button
+                  key={d}
+                  disabled={dayDisabled}
+                  className={`border rounded-md py-2 text-xs text-center ${dayButtonClass(dayDisabled, selectedDate === d)}`}
+                  onClick={handleDayClick}
+                >
+                  {new Date(d).getDate()}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const BookingPage: React.FC = () => {
   const navigate = useNavigate();
   const [amenities, setAmenities] = useState<AmenityPublic[]>([]);
@@ -99,24 +156,17 @@ export const BookingPage: React.FC = () => {
     load();
   }, []);
 
-  useEffect(() => {
-    const loadUpcoming = async () => {
-      if (!(currentUser?.role === 'admin' || currentUser?.role === 'super')) return;
-      try {
-        const { data } = await api.get('/bookings/upcoming');
-        setUpcoming(data);
-      } catch {}
-    };
-    loadUpcoming();
-  }, [currentUser]);
-
-  const refreshUpcomingIfAdmin = async () => {
+  const loadUpcoming = async () => {
     if (!(currentUser?.role === 'admin' || currentUser?.role === 'super')) return;
     try {
       const { data } = await api.get('/bookings/upcoming');
       setUpcoming(data);
     } catch {}
   };
+
+  useEffect(() => {
+    loadUpcoming();
+  }, [currentUser]);
 
   const loadPastBookings = async (page = 1) => {
     setIsLoadingPast(true);
@@ -299,7 +349,7 @@ export const BookingPage: React.FC = () => {
       const mine = await api.get('/bookings/me');
       setMyBookings(mine.data);
       // refresh upcoming for admins
-      await refreshUpcomingIfAdmin();
+      await loadUpcoming();
       setSelected(null);
       setSelectedDate('');
       setSelectedTime('');
@@ -320,7 +370,7 @@ export const BookingPage: React.FC = () => {
       }
       const mine = await api.get('/bookings/me');
       setMyBookings(mine.data);
-      await refreshUpcomingIfAdmin();
+      await loadUpcoming();
     } catch (e: any) {
       setError(e.response?.data?.message || 'Failed to delete booking');
     }
@@ -329,12 +379,6 @@ export const BookingPage: React.FC = () => {
   const handleLogout = () => {
     authService.logout();
     navigate('/login');
-  };
-
-  const dayButtonClass = (disabled: boolean, isSelected: boolean): string => {
-    if (disabled) return 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50';
-    if (isSelected) return 'border-primary-600 text-primary-700';
-    return 'border-gray-200 text-gray-700 hover:border-gray-300';
   };
 
   const slotButtonClass = (booked: boolean, isSelected: boolean): string => {
@@ -405,45 +449,15 @@ export const BookingPage: React.FC = () => {
         )}
         <div>
           <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Select date</h4>
-          <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
-            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">
-              <div className="text-center">Mon</div>
-              <div className="text-center">Tue</div>
-              <div className="text-center">Wed</div>
-              <div className="text-center">Thu</div>
-              <div className="text-center">Fri</div>
-              <div className="text-center">Sat</div>
-              <div className="text-center">Sun</div>
-            </div>
-            <div className="space-y-1 sm:space-y-2">
-              {calendarWeeks.map((week, wi) => (
-                <div key={week.find(d => d !== null) ?? `week-${wi}`} className="grid grid-cols-7 gap-1 sm:gap-2">
-                  {week.map((d, di) => {
-                    if (!d) return (<div key={`empty-${wi}-${di}`} className="py-2 text-xs text-center text-gray-300 border border-transparent">—</div>);
-                    const dayBookingsCount = myBookings.filter((b) => b.amenityId === (selected?.id || '') && b.date === d).length;
-                    const dayDisabled = selected?.maxPerDay != null && dayBookingsCount >= (selected?.maxPerDay || 0);
-                    return (
-                      <button
-                        key={d}
-                        disabled={dayDisabled}
-                        className={`border rounded-md py-2 text-xs text-center ${dayButtonClass(dayDisabled, selectedDate === d)}`}
-                        onClick={() => {
-                          if (dayDisabled) {
-                            setInfoMessage('You have already made a booking this day');
-                            return;
-                          }
-                          setSelectedDate(d);
-                          setSelectedTime('');
-                        }}
-                      >
-                        {new Date(d).getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
+          <CalendarGrid
+            calendarWeeks={calendarWeeks}
+            myBookings={myBookings}
+            selected={selected}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            setSelectedTime={setSelectedTime}
+            setInfoMessage={setInfoMessage}
+          />
         </div>
         {selectedDate && (
           <div>
