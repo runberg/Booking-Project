@@ -23,6 +23,40 @@ import { RestrictionsService } from '../../shared/restrictions/restrictions.serv
 import { UserThrottlerGuard } from '../../shared/bookings/user-throttler.guard';
 import type { RequestWithUser } from '../../shared/types/request-with-user';
 
+type ListLogsQuery = {
+  page?: string;
+  pageSize?: string;
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
+  q?: string;
+  action?: string;
+  userEmail?: string;
+  userName?: string;
+  amenityName?: string;
+  building?: string;
+  apartmentNumber?: string;
+  date?: string;
+  startTime?: string;
+  slotLength?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+type ExportLogsQuery = {
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
+  q?: string;
+  action?: string;
+  userEmail?: string;
+  userName?: string;
+  amenityName?: string;
+  building?: string;
+  apartmentNumber?: string;
+  date?: string;
+  startTime?: string;
+  slotLength?: string;
+};
+
 @Controller('bookings')
 @UseGuards(JwtAuthGuard, UserThrottlerGuard, RolesGuard)
 export class BookingsController {
@@ -60,41 +94,24 @@ export class BookingsController {
 
   @Get('logs')
   @Roles(UserRole.ADMIN, UserRole.SUPER)
-  async listLogs(
-    @Query('page') page = '1',
-    @Query('pageSize') pageSize = '20',
-    @Query('sortBy') sortBy?: string,
-    @Query('sortDir') sortDir?: 'ASC' | 'DESC',
-    @Query('q') q?: string,
-    @Query('action') action?: string,
-    @Query('userEmail') userEmail?: string,
-    @Query('userName') userName?: string,
-    @Query('amenityName') amenityName?: string,
-    @Query('building') building?: string,
-    @Query('apartmentNumber') apartmentNumber?: string,
-    @Query('date') date?: string,
-    @Query('startTime') startTime?: string,
-    @Query('slotLength') slotLength?: string,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
+  async listLogs(@Query() query: ListLogsQuery) {
     return this.bookingsService.listLogs({
-      page: Number(page) || 1,
-      pageSize: Number(pageSize) || 20,
-      sortBy,
-      sortDir,
-      q,
-      action,
-      userEmail,
-      userName,
-      amenityName,
-      building,
-      apartmentNumber,
-      date,
-      startTime,
-      slotLength: slotLength ? Number(slotLength) : undefined,
-      dateFrom,
-      dateTo,
+      page: Number(query.page) || 1,
+      pageSize: Number(query.pageSize) || 20,
+      sortBy: query.sortBy,
+      sortDir: query.sortDir,
+      q: query.q,
+      action: query.action,
+      userEmail: query.userEmail,
+      userName: query.userName,
+      amenityName: query.amenityName,
+      building: query.building,
+      apartmentNumber: query.apartmentNumber,
+      date: query.date,
+      startTime: query.startTime,
+      slotLength: query.slotLength ? Number(query.slotLength) : undefined,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
     });
   }
 
@@ -112,33 +129,20 @@ export class BookingsController {
 
   @Get('logs/export')
   @Roles(UserRole.ADMIN, UserRole.SUPER)
-  async exportLogs(
-    @Query('sortBy') sortBy?: string,
-    @Query('sortDir') sortDir?: 'ASC' | 'DESC',
-    @Query('q') q?: string,
-    @Query('action') action?: string,
-    @Query('userEmail') userEmail?: string,
-    @Query('userName') userName?: string,
-    @Query('amenityName') amenityName?: string,
-    @Query('building') building?: string,
-    @Query('apartmentNumber') apartmentNumber?: string,
-    @Query('date') date?: string,
-    @Query('startTime') startTime?: string,
-    @Query('slotLength') slotLength?: string,
-  ) {
+  async exportLogs(@Query() query: ExportLogsQuery) {
     return this.bookingsService.exportLogsCsv({
-      sortBy,
-      sortDir,
-      q,
-      action,
-      userEmail,
-      userName,
-      amenityName,
-      building,
-      apartmentNumber,
-      date,
-      startTime,
-      slotLength: slotLength ? Number(slotLength) : undefined,
+      sortBy: query.sortBy,
+      sortDir: query.sortDir,
+      q: query.q,
+      action: query.action,
+      userEmail: query.userEmail,
+      userName: query.userName,
+      amenityName: query.amenityName,
+      building: query.building,
+      apartmentNumber: query.apartmentNumber,
+      date: query.date,
+      startTime: query.startTime,
+      slotLength: query.slotLength ? Number(query.slotLength) : undefined,
     });
   }
 
@@ -184,7 +188,7 @@ export class BookingsController {
       );
       if (rr) {
         daysAhead = rr.daysAhead ?? daysAhead;
-        maxPerPeriod = (rr.maxPerPeriod as number | null) ?? null;
+        maxPerPeriod = rr.maxPerPeriod ?? null;
       }
     }
     if (maxPerPeriod != null && maxPerPeriod > 0) {

@@ -47,18 +47,18 @@ export const RichEmailEditor: React.FC<Props> = ({
 
   const exec = (cmd: string, arg?: string) => {
     editorRef.current?.focus();
-    document.execCommand(cmd, false, arg);
+    document.execCommand(cmd, false, arg); // NOSONAR — deprecated but no alternative for contenteditable formatting
   };
 
   const insertHTML = (html: string) => {
     editorRef.current?.focus();
-    document.execCommand('insertHTML', false, html);
+    document.execCommand('insertHTML', false, html); // NOSONAR — deprecated but no alternative for contenteditable formatting
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
+    document.execCommand('insertText', false, text); // NOSONAR — deprecated but no alternative for contenteditable formatting
   };
 
   const fmtBtn = 'px-2.5 py-1 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 select-none';

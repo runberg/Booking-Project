@@ -14,9 +14,9 @@ import { BuildingUnit } from './building-unit.entity';
 export class BuildingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Building)
-    private buildingsRepository: Repository<Building>,
+    private readonly buildingsRepository: Repository<Building>,
     @InjectRepository(BuildingUnit)
-    private unitsRepo: Repository<BuildingUnit>,
+    private readonly unitsRepo: Repository<BuildingUnit>,
   ) {}
 
   async onModuleInit() {

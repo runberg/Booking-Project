@@ -2,8 +2,33 @@ import { Controller, Get } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AmenitiesService } from '../../shared/amenities/amenities.service';
+import { Amenity } from '../../shared/amenities/amenity.entity';
 import { BookingRestriction } from '../../shared/restrictions/booking-restriction.entity';
 import { Booking } from '../../shared/bookings/booking.entity';
+
+type SlotContext = {
+  open: number;
+  close: number;
+  slotLength: number;
+  daysAhead: number;
+};
+
+type NowContext = {
+  now: Date;
+  todayKey: string;
+  nowMinutes: number;
+};
+
+type Slot = { date: string; time: string };
+
+type AmenityStatus = {
+  id: string;
+  name: string;
+  status: 'free' | 'booked' | 'closed';
+  freeUntil: string | null;
+  nextAvailable: string | null;
+  availableForDays: number | null;
+};
 
 @Controller('amenities')
 export class AmenitiesController {
@@ -56,163 +81,187 @@ export class AmenitiesController {
     const idToRestriction = new Map(restrictions.map((r) => [r.id, r]));
 
     const now = new Date();
-    const todayKey = toDateKey(now);
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowCtx: NowContext = {
+      now,
+      todayKey: toDateKey(now),
+      nowMinutes: now.getHours() * 60 + now.getMinutes(),
+    };
 
-    const result: Array<{
-      id: string;
-      name: string;
-      status: 'free' | 'booked' | 'closed';
-      freeUntil?: string | null;
-      nextAvailable?: string | null;
-      availableForDays?: number | null;
-    }> = [];
-
+    const result: AmenityStatus[] = [];
     for (const a of amenities) {
-      const open = parseTime(a.openTime || '09:00');
-      const close = parseTime(a.closeTime || '22:00');
-      const slotLength = a.slotLength || 60;
-      const daysAhead =
-        idToRestriction.get(a.bookingRestrictionId || '')?.daysAhead ?? 14;
-
-      const getBookedSet = async (dateKey: string) => {
-        const list = await this.bookingsRepo.find({
-          where: { amenityId: a.id, date: dateKey },
-        });
-        return new Set(list.map((b) => b.startTime));
+      const ctx: SlotContext = {
+        open: parseTime(a.openTime || '09:00'),
+        close: parseTime(a.closeTime || '22:00'),
+        slotLength: a.slotLength || 60,
+        daysAhead:
+          idToRestriction.get(a.bookingRestrictionId || '')?.daysAhead ?? 14,
       };
-
-      if (nowMinutes < open || nowMinutes >= close) {
-        const searchStart = nowMinutes < open ? new Date(now) : addDays(now, 1);
-        let found: { date: string; time: string } | null = null;
-        for (let d = 0; d <= daysAhead && !found; d++) {
-          const day = addDays(searchStart, d);
-          const dateKey = toDateKey(day);
-          const booked = await getBookedSet(dateKey);
-          for (let t = open; t < close; t += slotLength) {
-            if (!booked.has(toHHmm(t))) {
-              found = { date: dateKey, time: toHHmm(t) };
-              break;
-            }
-          }
-        }
-        result.push({
-          id: a.id,
-          name: a.name,
-          status: 'closed',
-          nextAvailable: found ? `${found.date} ${found.time}` : null,
-          freeUntil: null,
-          availableForDays: null,
-        });
-        continue;
-      }
-
-      const bookedToday = await getBookedSet(todayKey);
-      const currentSlotStart =
-        open +
-        Math.floor(Math.max(0, nowMinutes - open) / slotLength) * slotLength;
-      const isCurrentBooked = bookedToday.has(toHHmm(currentSlotStart));
-
-      const findNextBooked = async (): Promise<{
-        date: string;
-        time: string;
-      } | null> => {
-        for (
-          let t = Math.max(currentSlotStart, open);
-          t < close;
-          t += slotLength
-        ) {
-          if (bookedToday.has(toHHmm(t)))
-            return { date: todayKey, time: toHHmm(t) };
-        }
-        for (let d = 1; d <= daysAhead; d++) {
-          const day = addDays(now, d);
-          const dateKey = toDateKey(day);
-          const booked = await getBookedSet(dateKey);
-          for (let t = open; t < close; t += slotLength) {
-            if (booked.has(toHHmm(t)))
-              return { date: dateKey, time: toHHmm(t) };
-          }
-        }
-        return null;
-      };
-
-      const findNextFree = async (): Promise<{
-        date: string;
-        time: string;
-      } | null> => {
-        const startToday = ceilToSlot(nowMinutes, open, slotLength);
-        for (let t = startToday; t < close; t += slotLength) {
-          if (!bookedToday.has(toHHmm(t)))
-            return { date: todayKey, time: toHHmm(t) };
-        }
-        for (let d = 1; d <= daysAhead; d++) {
-          const day = addDays(now, d);
-          const dateKey = toDateKey(day);
-          const booked = await getBookedSet(dateKey);
-          for (let t = open; t < close; t += slotLength) {
-            if (!booked.has(toHHmm(t)))
-              return { date: dateKey, time: toHHmm(t) };
-          }
-        }
-        return null;
-      };
-
-      if (isCurrentBooked) {
-        const nf = await findNextFree();
-        result.push({
-          id: a.id,
-          name: a.name,
-          status: 'booked',
-          nextAvailable: nf ? `${nf.date} ${nf.time}` : null,
-          freeUntil: null,
-          availableForDays: null,
-        });
-        continue;
-      }
-
-      const nextBooked = await findNextBooked();
-      if (!nextBooked) {
-        result.push({
-          id: a.id,
-          name: a.name,
-          status: 'free',
-          freeUntil: null,
-          nextAvailable: null,
-          availableForDays: daysAhead,
-        });
-        continue;
-      }
-
-      const [nbH, nbM] = nextBooked.time.split(':').map(Number);
-      const minutesUntil =
-        nextBooked.date === todayKey
-          ? nbH * 60 + nbM - nowMinutes
-          : Number.MAX_SAFE_INTEGER;
-      if (minutesUntil < 20) {
-        const nf = await findNextFree();
-        result.push({
-          id: a.id,
-          name: a.name,
-          status: 'booked',
-          nextAvailable: nf ? `${nf.date} ${nf.time}` : null,
-          freeUntil: null,
-          availableForDays: null,
-        });
-      } else {
-        result.push({
-          id: a.id,
-          name: a.name,
-          status: 'free',
-          freeUntil: `${nextBooked.date} ${nextBooked.time}`,
-          nextAvailable: null,
-          availableForDays: null,
-        });
-      }
+      result.push(await this.resolveAmenityAvailability(a, ctx, nowCtx));
     }
-
     return result;
   }
+
+  private async resolveAmenityAvailability(
+    a: Amenity,
+    ctx: SlotContext,
+    nowCtx: NowContext,
+  ): Promise<AmenityStatus> {
+    if (nowCtx.nowMinutes < ctx.open || nowCtx.nowMinutes >= ctx.close) {
+      return this.resolveClosedStatus(a, ctx, nowCtx);
+    }
+
+    const bookedToday = await this.getBookedSet(a.id, nowCtx.todayKey);
+    const currentSlotStart =
+      ctx.open +
+      Math.floor(Math.max(0, nowCtx.nowMinutes - ctx.open) / ctx.slotLength) *
+        ctx.slotLength;
+
+    if (bookedToday.has(toHHmm(currentSlotStart))) {
+      const nf = await this.findNextFreeFromNow(a.id, ctx, nowCtx, bookedToday);
+      return toStatus(a, 'booked', null, nf, null);
+    }
+
+    return this.resolveOpenStatus(a, ctx, nowCtx, bookedToday, currentSlotStart);
+  }
+
+  private async resolveClosedStatus(
+    a: Amenity,
+    ctx: SlotContext,
+    nowCtx: NowContext,
+  ): Promise<AmenityStatus> {
+    const searchStart =
+      nowCtx.nowMinutes < ctx.open ? new Date(nowCtx.now) : addDays(nowCtx.now, 1);
+    const found = await this.findNextFreeSlot(a.id, searchStart, ctx);
+    return toStatus(a, 'closed', null, found, null);
+  }
+
+  private async resolveOpenStatus(
+    a: Amenity,
+    ctx: SlotContext,
+    nowCtx: NowContext,
+    bookedToday: Set<string>,
+    currentSlotStart: number,
+  ): Promise<AmenityStatus> {
+    const nextBooked = await this.findNextBookedFrom(
+      a.id,
+      ctx,
+      nowCtx,
+      bookedToday,
+      currentSlotStart,
+    );
+
+    if (!nextBooked) {
+      return toStatus(a, 'free', null, null, ctx.daysAhead);
+    }
+
+    const [nbH, nbM] = nextBooked.time.split(':').map(Number);
+    const minutesUntil =
+      nextBooked.date === nowCtx.todayKey
+        ? nbH * 60 + nbM - nowCtx.nowMinutes
+        : Number.MAX_SAFE_INTEGER;
+
+    if (minutesUntil < 20) {
+      const nf = await this.findNextFreeFromNow(a.id, ctx, nowCtx, bookedToday);
+      return toStatus(a, 'booked', null, nf, null);
+    }
+
+    return toStatus(a, 'free', nextBooked, null, null);
+  }
+
+  private async findNextFreeSlot(
+    amenityId: string,
+    from: Date,
+    ctx: SlotContext,
+  ): Promise<Slot | null> {
+    for (let d = 0; d <= ctx.daysAhead; d++) {
+      const day = addDays(from, d);
+      const dateKey = toDateKey(day);
+      const booked = await this.getBookedSet(amenityId, dateKey);
+      for (let t = ctx.open; t < ctx.close; t += ctx.slotLength) {
+        if (!booked.has(toHHmm(t))) return { date: dateKey, time: toHHmm(t) };
+      }
+    }
+    return null;
+  }
+
+  private async findNextFreeFromNow(
+    amenityId: string,
+    ctx: SlotContext,
+    nowCtx: NowContext,
+    bookedToday: Set<string>,
+  ): Promise<Slot | null> {
+    const startSlot = ceilToSlot(nowCtx.nowMinutes, ctx.open, ctx.slotLength);
+    for (let t = startSlot; t < ctx.close; t += ctx.slotLength) {
+      if (!bookedToday.has(toHHmm(t)))
+        return { date: nowCtx.todayKey, time: toHHmm(t) };
+    }
+    for (let d = 1; d <= ctx.daysAhead; d++) {
+      const day = addDays(nowCtx.now, d);
+      const dateKey = toDateKey(day);
+      const booked = await this.getBookedSet(amenityId, dateKey);
+      for (let t = ctx.open; t < ctx.close; t += ctx.slotLength) {
+        if (!booked.has(toHHmm(t))) return { date: dateKey, time: toHHmm(t) };
+      }
+    }
+    return null;
+  }
+
+  private async findNextBookedFrom(
+    amenityId: string,
+    ctx: SlotContext,
+    nowCtx: NowContext,
+    bookedToday: Set<string>,
+    currentSlotStart: number,
+  ): Promise<Slot | null> {
+    for (
+      let t = Math.max(currentSlotStart, ctx.open);
+      t < ctx.close;
+      t += ctx.slotLength
+    ) {
+      if (bookedToday.has(toHHmm(t)))
+        return { date: nowCtx.todayKey, time: toHHmm(t) };
+    }
+    for (let d = 1; d <= ctx.daysAhead; d++) {
+      const day = addDays(nowCtx.now, d);
+      const dateKey = toDateKey(day);
+      const booked = await this.getBookedSet(amenityId, dateKey);
+      for (let t = ctx.open; t < ctx.close; t += ctx.slotLength) {
+        if (booked.has(toHHmm(t))) return { date: dateKey, time: toHHmm(t) };
+      }
+    }
+    return null;
+  }
+
+  private async getBookedSet(
+    amenityId: string,
+    dateKey: string,
+  ): Promise<Set<string>> {
+    const list = await this.bookingsRepo.find({
+      where: { amenityId, date: dateKey },
+    });
+    return new Set(list.map((b) => b.startTime));
+  }
+}
+
+function toStatus(
+  a: Amenity,
+  status: AmenityStatus['status'],
+  freeUntilSlot: Slot | null,
+  nextAvailableSlot: Slot | null,
+  availableForDays: number | null,
+): AmenityStatus {
+  return {
+    id: a.id,
+    name: a.name,
+    status,
+    freeUntil: freeUntilSlot
+      ? `${freeUntilSlot.date} ${freeUntilSlot.time}`
+      : null,
+    nextAvailable: nextAvailableSlot
+      ? `${nextAvailableSlot.date} ${nextAvailableSlot.time}`
+      : null,
+    availableForDays,
+  };
 }
 
 function parseTime(t: string): number {

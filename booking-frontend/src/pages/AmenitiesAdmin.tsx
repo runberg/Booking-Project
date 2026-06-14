@@ -54,8 +54,7 @@ export const AmenitiesAdmin: React.FC = () => {
     try {
       const { data } = await api.get('/admin/restrictions');
       setRestrictions(data);
-    } catch (e: any) {
-      // ignore silently on first load; UI shows empty list message
+    } catch { // NOSONAR — intentionally silent; UI handles empty-list state
     }
   };
 
@@ -63,7 +62,7 @@ export const AmenitiesAdmin: React.FC = () => {
     if (!newAmenity.name?.trim()) return;
     try {
       const payload = {
-        name: newAmenity.name!.trim(),
+        name: (newAmenity.name ?? '').trim(),
         description: newAmenity.description || '',
         openTime: newAmenity.openTime || '09:00',
         closeTime: newAmenity.closeTime || '22:00',
@@ -138,6 +137,139 @@ export const AmenitiesAdmin: React.FC = () => {
     }
   };
 
+  const renderAmenitiesContent = () => {
+    if (isLoading) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
+        </div>
+      );
+    }
+    if (amenities.length === 0) {
+      return (
+        <div className="bg-gray-50 border border-gray-200 rounded-md p-6 text-center text-gray-600">
+          No amenities yet. Click "Add Amenity" to create one.
+        </div>
+      );
+    }
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenity</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slot</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Restriction</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {amenities.map((a) => (
+              <tr key={a.id}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center space-x-3">
+                    <img src={a.imageUrl || placeholder} alt="amenity" className="h-10 w-10 rounded object-cover" />
+                    {editingId === a.id ? (
+                      <input className="rounded-md border border-gray-300 py-1 px-2" value={editing.name as string} onChange={(e) => setEditing((s) => ({ ...s, name: e.target.value }))} />
+                    ) : (
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{a.name}</div>
+                        <div className="text-sm text-gray-500">{a.description}</div>
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {editingId === a.id ? (
+                    <div className="flex items-center space-x-2">
+                      <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.openTime as string) || a.openTime} onChange={(e) => setEditing((s) => ({ ...s, openTime: e.target.value }))} />
+                      <span>-</span>
+                      <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.closeTime as string) || a.closeTime} onChange={(e) => setEditing((s) => ({ ...s, closeTime: e.target.value }))} />
+                    </div>
+                  ) : (
+                    `${a.openTime} - ${a.closeTime}`
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {editingId === a.id ? (
+                    <select className="rounded-md border border-gray-300 py-1 px-2" value={(editing.slotLength as number) ?? a.slotLength} onChange={(e) => setEditing((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
+                      <option value={30}>30</option>
+                      <option value={60}>60</option>
+                      <option value={90}>90</option>
+                      <option value={120}>120</option>
+                    </select>
+                  ) : (
+                    `${a.slotLength} min`
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {editingId === a.id ? (
+                    <select
+                      className="rounded-md border border-gray-300 py-1 px-2"
+                      value={(editing.bookingRestrictionId as string) ?? a.bookingRestrictionId ?? ''}
+                      onChange={(e) => setEditing((s) => ({ ...s, bookingRestrictionId: e.target.value || null }))}
+                    >
+                      <option value="">No restriction</option>
+                      {restrictions.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} (D{r.daysAhead} / P{r.maxPerPeriod} / D{r.maxPerDay})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    restrictions.find((r) => r.id === a.bookingRestrictionId)?.name || '—'
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {editingId === a.id ? (
+                    <div className="flex items-center space-x-3">
+                      <input type="checkbox" checked={editing.isActive ?? a.isActive} onChange={(e) => setEditing((s) => ({ ...s, isActive: e.target.checked }))} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > MAX_IMAGE_BYTES) {
+                            setError('Image is too large. Max size is 2 MB.');
+                            return;
+                          }
+                          setError('');
+                          const reader = new FileReader();
+                          reader.onload = () => setEditing((s) => ({ ...s, imageUrl: reader.result as string }));
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${a.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{a.isActive ? 'Active' : 'Inactive'}</span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                  {editingId === a.id ? (
+                    <>
+                      <Button variant="secondary" onClick={() => { setEditingId(null); setEditing({}); }}>Cancel</Button>
+                      <Button onClick={saveEdit}>Save</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="secondary" onClick={() => startEdit(a)}>Edit</Button>
+                      <Button variant="secondary" onClick={() => a.qrToken ? openQrModal(a) : regenerateQr(a)} title={a.qrToken ? 'View QR code' : 'Generate QR code'}>QR</Button>
+                      <Button variant="secondary" className="text-red-600 hover:text-red-900" onClick={() => deleteAmenity(a.id)}>Delete</Button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -169,7 +301,7 @@ export const AmenitiesAdmin: React.FC = () => {
       {createOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Add Amenity</h3>
@@ -177,26 +309,26 @@ export const AmenitiesAdmin: React.FC = () => {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.name || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, name: e.target.value }))} />
+                  <label htmlFor="amenity-new-name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input id="amenity-new-name" className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.name || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, name: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.description || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, description: e.target.value }))} />
+                  <label htmlFor="amenity-new-desc" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <input id="amenity-new-desc" className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.description || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, description: e.target.value }))} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Open time</label>
-                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.openTime || '09:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, openTime: e.target.value }))} />
+                    <label htmlFor="amenity-new-open" className="block text-sm font-medium text-gray-700 mb-1">Open time</label>
+                    <input id="amenity-new-open" className="w-full rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.openTime || '09:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, openTime: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Close time</label>
-                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.closeTime || '22:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, closeTime: e.target.value }))} />
+                    <label htmlFor="amenity-new-close" className="block text-sm font-medium text-gray-700 mb-1">Close time</label>
+                    <input id="amenity-new-close" className="w-full rounded-md border border-gray-300 py-2 px-3" type="time" value={newAmenity.closeTime || '22:00'} onChange={(e) => setNewAmenity((s) => ({ ...s, closeTime: e.target.value }))} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Slot length</label>
-                  <select className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.slotLength || 60} onChange={(e) => setNewAmenity((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
+                  <label htmlFor="amenity-new-slot" className="block text-sm font-medium text-gray-700 mb-1">Slot length</label>
+                  <select id="amenity-new-slot" className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.slotLength || 60} onChange={(e) => setNewAmenity((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
                     <option value={30}>30 min</option>
                     <option value={60}>60 min</option>
                     <option value={90}>90 min</option>
@@ -204,8 +336,8 @@ export const AmenitiesAdmin: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Restriction</label>
-                  <select className="w-full rounded-md border border-gray-300 py-2 px-3" value={(newAmenity.bookingRestrictionId as any) || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, bookingRestrictionId: e.target.value }))}>
+                  <label htmlFor="amenity-new-restriction" className="block text-sm font-medium text-gray-700 mb-1">Restriction</label>
+                  <select id="amenity-new-restriction" className="w-full rounded-md border border-gray-300 py-2 px-3" value={(newAmenity.bookingRestrictionId as any) || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, bookingRestrictionId: e.target.value }))}>
                     <option value="" disabled>Select restriction</option>
                     {restrictions.map((r) => (
                       <option key={r.id} value={r.id}>{r.name} (D{r.daysAhead}/P{r.maxPerPeriod}/D{r.maxPerDay})</option>
@@ -213,12 +345,13 @@ export const AmenitiesAdmin: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
-                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.imageUrl || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, imageUrl: e.target.value }))} />
+                  <label htmlFor="amenity-new-imageurl" className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
+                  <input id="amenity-new-imageurl" className="w-full rounded-md border border-gray-300 py-2 px-3" value={newAmenity.imageUrl || ''} onChange={(e) => setNewAmenity((s) => ({ ...s, imageUrl: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Upload Image (optional)</label>
+                  <label htmlFor="amenity-new-upload" className="block text-sm font-medium text-gray-700 mb-1">Upload Image (optional)</label>
                   <input
+                    id="amenity-new-upload"
                     type="file"
                     accept="image/*"
                     onChange={(e) => {
@@ -258,133 +391,12 @@ export const AmenitiesAdmin: React.FC = () => {
         <div className="mb-4">
           <Button onClick={() => setCreateOpen(true)} variant="secondary" disabled={!restrictions.length}>Add Amenity</Button>
         </div>
-        {isLoading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
-          </div>
-        ) : amenities.length === 0 ? (
-          <div className="bg-gray-50 border border-gray-200 rounded-md p-6 text-center text-gray-600">No amenities yet. Click "Add Amenity" to create one.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slot</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Restriction</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {amenities.map((a) => (
-                <tr key={a.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3">
-                      <img src={a.imageUrl || placeholder} alt="amenity" className="h-10 w-10 rounded object-cover" />
-                      {editingId === a.id ? (
-                        <input className="rounded-md border border-gray-300 py-1 px-2" value={editing.name as string} onChange={(e) => setEditing((s) => ({ ...s, name: e.target.value }))} />
-                      ) : (
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{a.name}</div>
-                          <div className="text-sm text-gray-500">{a.description}</div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {editingId === a.id ? (
-                      <div className="flex items-center space-x-2">
-                        <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.openTime as string) || a.openTime} onChange={(e) => setEditing((s) => ({ ...s, openTime: e.target.value }))} />
-                        <span>-</span>
-                        <input type="time" className="rounded-md border border-gray-300 py-1 px-2" value={(editing.closeTime as string) || a.closeTime} onChange={(e) => setEditing((s) => ({ ...s, closeTime: e.target.value }))} />
-                      </div>
-                    ) : (
-                      `${a.openTime} - ${a.closeTime}`
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {editingId === a.id ? (
-                      <select className="rounded-md border border-gray-300 py-1 px-2" value={(editing.slotLength as number) ?? a.slotLength} onChange={(e) => setEditing((s) => ({ ...s, slotLength: Number(e.target.value) }))}>
-                        <option value={30}>30</option>
-                        <option value={60}>60</option>
-                        <option value={90}>90</option>
-                        <option value={120}>120</option>
-                      </select>
-                    ) : (
-                      `${a.slotLength} min`
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {editingId === a.id ? (
-                      <select
-                        className="rounded-md border border-gray-300 py-1 px-2"
-                        value={(editing.bookingRestrictionId as string) ?? a.bookingRestrictionId ?? ''}
-                        onChange={(e) => setEditing((s) => ({ ...s, bookingRestrictionId: e.target.value || null }))}
-                      >
-                        <option value="">No restriction</option>
-                        {restrictions.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} (D{r.daysAhead} / P{r.maxPerPeriod} / D{r.maxPerDay})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      restrictions.find((r) => r.id === a.bookingRestrictionId)?.name || '—'
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {editingId === a.id ? (
-                      <div className="flex items-center space-x-3">
-                        <input type="checkbox" checked={editing.isActive ?? a.isActive} onChange={(e) => setEditing((s) => ({ ...s, isActive: e.target.checked }))} />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            if (file.size > MAX_IMAGE_BYTES) {
-                              setError('Image is too large. Max size is 2 MB.');
-                              return;
-                            }
-                            setError('');
-                            const reader = new FileReader();
-                            reader.onload = () => setEditing((s) => ({ ...s, imageUrl: reader.result as string }));
-                            reader.readAsDataURL(file);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${a.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{a.isActive ? 'Active' : 'Inactive'}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    {editingId === a.id ? (
-                      <>
-                        <Button variant="secondary" onClick={() => { setEditingId(null); setEditing({}); }}>Cancel</Button>
-                        <Button onClick={saveEdit}>Save</Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button variant="secondary" onClick={() => startEdit(a)}>Edit</Button>
-                        <Button variant="secondary" onClick={() => a.qrToken ? openQrModal(a) : regenerateQr(a)} title={a.qrToken ? 'View QR code' : 'Generate QR code'}>QR</Button>
-                        <Button variant="secondary" className="text-red-600 hover:text-red-900" onClick={() => deleteAmenity(a.id)}>Delete</Button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            </table>
-          </div>
-        )}
+        {renderAmenitiesContent()}
       </div>
       {/* QR Code Modal */}
       {qrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setQrModal(null)} />
+          <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setQrModal(null)} />
           <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center">
             <h3 className="text-lg font-semibold text-gray-900 mb-1">{qrModal.amenity.name}</h3>
             <p className="text-xs text-gray-500 mb-4">Print and place this QR code at the amenity. Residents scan it to check in.</p>
@@ -405,7 +417,7 @@ export const AmenitiesAdmin: React.FC = () => {
       {createRestrictionOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateRestrictionOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateRestrictionOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Add Restriction</h3>
@@ -413,21 +425,21 @@ export const AmenitiesAdmin: React.FC = () => {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input className="w-full rounded-md border border-gray-300 py-2 px-3" value={newRestriction.name} onChange={(e) => setNewRestriction((s) => ({ ...s, name: e.target.value }))} />
+                  <label htmlFor="restriction-new-name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input id="restriction-new-name" className="w-full rounded-md border border-gray-300 py-2 px-3" value={newRestriction.name} onChange={(e) => setNewRestriction((s) => ({ ...s, name: e.target.value }))} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Days ahead</label>
-                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={1} value={newRestriction.daysAhead} onChange={(e) => setNewRestriction((s) => ({ ...s, daysAhead: Number(e.target.value) }))} />
+                    <label htmlFor="restriction-new-days" className="block text-sm font-medium text-gray-700 mb-1">Days ahead</label>
+                    <input id="restriction-new-days" className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={1} value={newRestriction.daysAhead} onChange={(e) => setNewRestriction((s) => ({ ...s, daysAhead: Number(e.target.value) }))} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max per period</label>
-                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={0} value={newRestriction.maxPerPeriod} onChange={(e) => setNewRestriction((s) => ({ ...s, maxPerPeriod: Number(e.target.value) }))} />
+                    <label htmlFor="restriction-new-per-period" className="block text-sm font-medium text-gray-700 mb-1">Max per period</label>
+                    <input id="restriction-new-per-period" className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={0} value={newRestriction.maxPerPeriod} onChange={(e) => setNewRestriction((s) => ({ ...s, maxPerPeriod: Number(e.target.value) }))} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max per day</label>
-                    <input className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={0} value={newRestriction.maxPerDay} onChange={(e) => setNewRestriction((s) => ({ ...s, maxPerDay: Number(e.target.value) }))} />
+                    <label htmlFor="restriction-new-per-day" className="block text-sm font-medium text-gray-700 mb-1">Max per day</label>
+                    <input id="restriction-new-per-day" className="w-full rounded-md border border-gray-300 py-2 px-3" type="number" min={0} value={newRestriction.maxPerDay} onChange={(e) => setNewRestriction((s) => ({ ...s, maxPerDay: Number(e.target.value) }))} />
                   </div>
                 </div>
               </div>

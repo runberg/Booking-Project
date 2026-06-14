@@ -43,15 +43,15 @@ const SORTABLE_LOG_COLUMNS = new Set([
 export class BookingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Booking)
-    private bookingsRepo: Repository<Booking>,
+    private readonly bookingsRepo: Repository<Booking>,
     @InjectRepository(BookingCancelToken)
-    private cancelTokenRepo: Repository<BookingCancelToken>,
+    private readonly cancelTokenRepo: Repository<BookingCancelToken>,
     @InjectRepository(BookingCheckinToken)
-    private checkinTokenRepo: Repository<BookingCheckinToken>,
-    private amenitiesService: AmenitiesService,
-    private usersService: UsersService,
+    private readonly checkinTokenRepo: Repository<BookingCheckinToken>,
+    private readonly amenitiesService: AmenitiesService,
+    private readonly usersService: UsersService,
     @InjectRepository(BookingLog)
-    private logsRepo: Repository<BookingLog>,
+    private readonly logsRepo: Repository<BookingLog>,
   ) {}
 
   async onModuleInit() {
@@ -131,7 +131,7 @@ export class BookingsService implements OnModuleInit {
 
   async deleteIfOwned(id: string, userId: string, ipAddress?: string) {
     const b = await this.bookingsRepo.findOne({ where: { id } });
-    if (!b || b.userId !== userId) {
+    if (b?.userId !== userId) {
       return { affected: 0 };
     }
     const res = await this.bookingsRepo.delete(id);
@@ -297,7 +297,7 @@ export class BookingsService implements OnModuleInit {
   // ── Cancel token ─────────────────────────────────────────────────────────
 
   async createCancelToken(bookingId: string, expiresAt: Date): Promise<string> {
-    const { randomBytes } = await import('crypto');
+    const { randomBytes } = await import('node:crypto');
     const token = randomBytes(32).toString('hex');
     await this.cancelTokenRepo.save(
       this.cancelTokenRepo.create({ bookingId, token, expiresAt }),
@@ -452,7 +452,7 @@ export class BookingsService implements OnModuleInit {
     bookingId: string,
     expiresAt: Date,
   ): Promise<string> {
-    const { randomBytes } = await import('crypto');
+    const { randomBytes } = await import('node:crypto');
     const token = randomBytes(32).toString('hex');
     await this.checkinTokenRepo.save(
       this.checkinTokenRepo.create({ bookingId, token, expiresAt }),
@@ -620,7 +620,7 @@ export class BookingsService implements OnModuleInit {
 
     const escape = (v: string) =>
       v.includes(',') || v.includes('"') || v.includes('\n')
-        ? '"' + v.replace(/"/g, '""') + '"'
+        ? '"' + v.replaceAll('"', '""') + '"'
         : v;
 
     const headers = [
@@ -650,7 +650,7 @@ export class BookingsService implements OnModuleInit {
           l.amenityName ?? '',
           l.date ?? '',
           l.startTime ?? '',
-          l.slotLength != null ? String(l.slotLength) : '',
+          l.slotLength == null ? '' : String(l.slotLength),
         ]
           .map((v) => escape(String(v ?? '')))
           .join(','),

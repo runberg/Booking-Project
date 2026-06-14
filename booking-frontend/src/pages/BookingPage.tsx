@@ -138,9 +138,8 @@ export const BookingPage: React.FC = () => {
         if (data?.text) {
           setBookingLegalText(data.text);
         }
-      } catch (e: any) {
+      } catch {
         // If it fails, just use the default
-        console.warn('Failed to load booking legal text:', e);
       }
     };
     loadBookingLegalText();
@@ -332,6 +331,209 @@ export const BookingPage: React.FC = () => {
     navigate('/login');
   };
 
+  const dayButtonClass = (disabled: boolean, isSelected: boolean): string => {
+    if (disabled) return 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50';
+    if (isSelected) return 'border-primary-600 text-primary-700';
+    return 'border-gray-200 text-gray-700 hover:border-gray-300';
+  };
+
+  const slotButtonClass = (booked: boolean, isSelected: boolean): string => {
+    if (booked) return 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50';
+    if (isSelected) return 'border-primary-600 text-primary-700';
+    return 'border-gray-200 text-gray-700 hover:border-primary-600';
+  };
+
+  const renderPastBookingsContent = () => {
+    if (isLoadingPast) {
+      return (
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
+        </div>
+      );
+    }
+    if (pastBookings.length === 0) {
+      return <p className="text-sm text-gray-600">No past bookings.</p>;
+    }
+    return (
+      <>
+        <ul className="divide-y divide-gray-200">
+          {pastBookings.map((b) => (
+            <li key={b.id} className="py-3">
+              <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
+              <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
+            </li>
+          ))}
+        </ul>
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
+          <div className="text-sm text-gray-600">Page {pastPage} of {Math.max(1, Math.ceil(pastTotal / 10))}</div>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="text-xs px-3 py-2" disabled={pastPage <= 1} onClick={() => loadPastBookings(pastPage - 1)}>Prev</Button>
+            <Button variant="secondary" className="text-xs px-3 py-2" disabled={pastPage >= Math.ceil(pastTotal / 10)} onClick={() => loadPastBookings(pastPage + 1)}>Next</Button>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderBookingStep = (): React.ReactNode => {
+    if (!selected) return null;
+    if (step !== 'select') {
+      return (
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-4">Confirm your booking</h4>
+          <div className="space-y-2 text-sm text-gray-700">
+            <div><span className="font-semibold">{selected.name}</span></div>
+            <div><span className="font-medium">Date:</span> {formatIsoDateToDmy(selectedDate)}</div>
+            <div><span className="font-medium">Time:</span> {selectedTime} ({selected.slotLength} min)</div>
+          </div>
+        </div>
+      );
+    }
+    if (periodLimitReached) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 text-sm text-yellow-800">
+          Sorry! You have reached the limit of bookings as per the restrictions set for the amenity.
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-6">
+        {selected?.maxPerPeriod != null && selected?.maxPerDay != null && (
+          <p className="text-xs sm:text-sm text-gray-600">
+            Bookings can only be created {selected.daysAhead} days ahead of today. Only {selected.maxPerPeriod} bookings per user within this time period and only {selected.maxPerDay} bookings per user per day.
+          </p>
+        )}
+        <div>
+          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Select date</h4>
+          <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">
+              <div className="text-center">Mon</div>
+              <div className="text-center">Tue</div>
+              <div className="text-center">Wed</div>
+              <div className="text-center">Thu</div>
+              <div className="text-center">Fri</div>
+              <div className="text-center">Sat</div>
+              <div className="text-center">Sun</div>
+            </div>
+            <div className="space-y-1 sm:space-y-2">
+              {calendarWeeks.map((week, wi) => (
+                <div key={week.find(d => d !== null) ?? `week-${wi}`} className="grid grid-cols-7 gap-1 sm:gap-2">
+                  {week.map((d, di) => {
+                    if (!d) return (<div key={`empty-${wi}-${di}`} className="py-2 text-xs text-center text-gray-300 border border-transparent">—</div>);
+                    const dayBookingsCount = myBookings.filter((b) => b.amenityId === (selected?.id || '') && b.date === d).length;
+                    const dayDisabled = selected?.maxPerDay != null && dayBookingsCount >= (selected?.maxPerDay || 0);
+                    return (
+                      <button
+                        key={d}
+                        disabled={dayDisabled}
+                        className={`border rounded-md py-2 text-xs text-center ${dayButtonClass(dayDisabled, selectedDate === d)}`}
+                        onClick={() => {
+                          if (dayDisabled) {
+                            setInfoMessage('You have already made a booking this day');
+                            return;
+                          }
+                          setSelectedDate(d);
+                          setSelectedTime('');
+                        }}
+                      >
+                        {new Date(d).getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        {selectedDate && (
+          <div>
+            <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Available time slots</h4>
+            {slots.length === 0 ? (
+              <div>
+                <p className="text-xs sm:text-sm text-gray-500">Sorry! - No available time slots</p>
+                <div className="mt-3"><Button variant="secondary" onClick={() => setSelected(null)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Close</Button></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                {slots.map((t) => {
+                  const isBooked = bookedTimes.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      disabled={isBooked}
+                      className={`border rounded-md py-2 px-2 text-sm ${slotButtonClass(isBooked, selectedTime === t)}`}
+                      onClick={() => !isBooked && setSelectedTime(t)}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderAmenitiesSection = () => {
+    if (isLoading) {
+      return (
+        <div className="text-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
+        </div>
+      );
+    }
+    if (amenities.length === 0) {
+      return (
+        <Card>
+          <p className="text-sm text-gray-600">No amenities are currently available for booking.</p>
+        </Card>
+      );
+    }
+    return (
+      <div className="space-y-4">
+        {amenities.map((a) => {
+          const nextBooking = getNextBookingForAmenity(a.id);
+          return (
+            <Card key={a.id}>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-shrink-0 w-full sm:w-48">
+                  <img alt="amenity" src={a.imageUrl || placeholder} className="w-full h-32 sm:h-36 object-cover rounded" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900">{a.name}</h3>
+                      {a.description && <p className="text-sm text-gray-600 mt-1">{a.description}</p>}
+                    </div>
+                    <div className="flex-shrink-0">
+                      <Button variant="secondary" onClick={() => { setSelected(a); setSelectedDate(''); setSelectedTime(''); setStep('select'); }} className="w-full sm:w-auto">Book</Button>
+                    </div>
+                  </div>
+                  {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      {nextBooking ? (
+                        <div className="text-xs sm:text-sm">
+                          <span className="font-medium text-gray-700">Next booking: </span>
+                          <span className="text-gray-600">{formatIsoDateToDmy(nextBooking.date)} {nextBooking.startTime} ({nextBooking.slotLength} min)</span>
+                          <span className="text-gray-500 ml-2">- {nextBooking.userName} ({nextBooking.building}, Apt {nextBooking.apartmentNumber})</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs sm:text-sm text-gray-500">No upcoming bookings</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -405,47 +607,7 @@ export const BookingPage: React.FC = () => {
             <div className="mt-3">
               <Card>
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Past bookings</h2>
-                {isLoadingPast ? (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
-                  </div>
-                ) : pastBookings.length === 0 ? (
-                  <p className="text-sm text-gray-600">No past bookings.</p>
-                ) : (
-                  <>
-                    <ul className="divide-y divide-gray-200">
-                      {pastBookings.map((b) => (
-                        <li key={b.id} className="py-3">
-                          <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
-                          <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
-                      <div className="text-sm text-gray-600">
-                        Page {pastPage} of {Math.max(1, Math.ceil(pastTotal / 10))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="secondary"
-                          className="text-xs px-3 py-2"
-                          disabled={pastPage <= 1}
-                          onClick={() => loadPastBookings(pastPage - 1)}
-                        >
-                          Prev
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          className="text-xs px-3 py-2"
-                          disabled={pastPage >= Math.ceil(pastTotal / 10)}
-                          onClick={() => loadPastBookings(pastPage + 1)}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                )}
+                {renderPastBookingsContent()}
               </Card>
             </div>
           )}
@@ -453,78 +615,13 @@ export const BookingPage: React.FC = () => {
 
         {/* Amenities Section */}
         <div className="mt-8">
-        {isLoading ? (
-          <div className="text-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-2 text-sm text-gray-600">Loading amenities...</p>
-          </div>
-        ) : amenities.length === 0 ? (
-          <Card>
-            <p className="text-sm text-gray-600">No amenities are currently available for booking.</p>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {amenities.map((a) => {
-              const nextBooking = getNextBookingForAmenity(a.id);
-              return (
-                <Card key={a.id}>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    {/* Photo */}
-                    <div className="flex-shrink-0 w-full sm:w-48">
-                      <img alt="amenity" src={a.imageUrl || placeholder} className="w-full h-32 sm:h-36 object-cover rounded" />
-                    </div>
-                    
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900">{a.name}</h3>
-                          {a.description && (
-                            <p className="text-sm text-gray-600 mt-1">{a.description}</p>
-                          )}
-                        </div>
-                        <div className="flex-shrink-0">
-                          <Button 
-                            variant="secondary" 
-                            onClick={() => { setSelected(a); setSelectedDate(''); setSelectedTime(''); setStep('select'); }} 
-                            className="w-full sm:w-auto"
-                          >
-                            Book
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      {/* Next booking info for admins */}
-                      {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          {nextBooking ? (
-                            <div className="text-xs sm:text-sm">
-                              <span className="font-medium text-gray-700">Next booking: </span>
-                              <span className="text-gray-600">
-                                {formatIsoDateToDmy(nextBooking.date)} {nextBooking.startTime} ({nextBooking.slotLength} min)
-                              </span>
-                              <span className="text-gray-500 ml-2">
-                                - {nextBooking.userName} ({nextBooking.building}, Apt {nextBooking.apartmentNumber})
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="text-xs sm:text-sm text-gray-500">No upcoming bookings</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+        {renderAmenitiesSection()}
         </div>
 
         {selected && (
           <div className="fixed inset-0 z-50">
             <div className="flex min-h-screen items-center justify-center p-4">
-              <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setSelected(null)} />
+              <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setSelected(null)} />
               <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0 pr-2">
@@ -533,111 +630,7 @@ export const BookingPage: React.FC = () => {
                   <button className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl leading-none flex-shrink-0" onClick={() => setSelected(null)} aria-label="Close">✕</button>
                 </div>
 
-                {step === 'select' ? (
-                  periodLimitReached ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 text-sm text-yellow-800">
-                      Sorry! You have reached the limit of bookings as per the restrictions set for the amenity.
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {selected?.maxPerPeriod != null && selected?.maxPerDay != null && (
-                        <p className="text-xs sm:text-sm text-gray-600">
-                          Bookings can only be created {selected.daysAhead} days ahead of today. Only {selected.maxPerPeriod} bookings per user within this time period and only {selected.maxPerDay} bookings per user per day.
-                        </p>
-                      )}
-                      <div>
-                        <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Select date</h4>
-                        <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
-                          <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">
-                            <div className="text-center">Mon</div>
-                            <div className="text-center">Tue</div>
-                            <div className="text-center">Wed</div>
-                            <div className="text-center">Thu</div>
-                            <div className="text-center">Fri</div>
-                            <div className="text-center">Sat</div>
-                            <div className="text-center">Sun</div>
-                          </div>
-                          <div className="space-y-1 sm:space-y-2">
-                            {calendarWeeks.map((week, wi) => (
-                              <div key={wi} className="grid grid-cols-7 gap-1 sm:gap-2">
-                                {week.map((d, di) => {
-                                  if (!d) return (<div key={`empty-${wi}-${di}`} className="py-2 text-xs text-center text-gray-300 border border-transparent">—</div>);
-                                  const dayBookingsCount = myBookings.filter((b) => b.amenityId === (selected?.id || '') && b.date === d).length;
-                                  const dayDisabled = selected?.maxPerDay != null && dayBookingsCount >= (selected?.maxPerDay || 0);
-                                  return (
-                                    <button
-                                      key={d}
-                                      disabled={dayDisabled}
-                                      className={`border rounded-md py-2 text-xs text-center ${
-                                        dayDisabled
-                                          ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
-                                          : selectedDate === d
-                                          ? 'border-primary-600 text-primary-700'
-                                          : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                                      }`}
-                                      onClick={() => {
-                                        if (dayDisabled) {
-                                          setInfoMessage('You have already made a booking this day');
-                                          return;
-                                        }
-                                        setSelectedDate(d);
-                                        setSelectedTime('');
-                                      }}
-                                    >
-                                      {new Date(d).getDate()}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      {selectedDate && (
-                        <div>
-                          <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Available time slots</h4>
-                          {slots.length === 0 ? (
-                            <div>
-                              <p className="text-xs sm:text-sm text-gray-500">Sorry! - No available time slots</p>
-                              <div className="mt-3"><Button variant="secondary" onClick={() => setSelected(null)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Close</Button></div>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
-                              {slots.map((t) => {
-                                const isBooked = bookedTimes.includes(t);
-                                return (
-                                  <button
-                                    key={t}
-                                    disabled={isBooked}
-                                    className={`border rounded-md py-2 px-2 text-sm ${
-                                      isBooked
-                                        ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
-                                        : selectedTime === t
-                                        ? 'border-primary-600 text-primary-700'
-                                        : 'border-gray-200 text-gray-700 hover:border-primary-600'
-                                    }`}
-                                    onClick={() => !isBooked && setSelectedTime(t)}
-                                  >
-                                    {t}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                ) : (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-4">Confirm your booking</h4>
-                    <div className="space-y-2 text-sm text-gray-700">
-                      <div><span className="font-semibold">{selected.name}</span></div>
-                      <div><span className="font-medium">Date:</span> {formatIsoDateToDmy(selectedDate)}</div>
-                      <div><span className="font-medium">Time:</span> {selectedTime} ({selected.slotLength} min)</div>
-                    </div>
-                  </div>
-                )}
+                {renderBookingStep()}
 
                 {infoMessage && (
                   <div className="mt-4 text-sm text-red-600">{infoMessage}</div>
@@ -665,7 +658,7 @@ export const BookingPage: React.FC = () => {
         {deleteConfirm.open && (
           <div className="fixed inset-0 z-50">
             <div className="flex min-h-screen items-center justify-center p-4">
-              <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setDeleteConfirm({ open: false, bookingId: null })} />
+              <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setDeleteConfirm({ open: false, bookingId: null })} />
               <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete booking</h3>
                 <p className="text-sm text-gray-600">Are you sure you want to delete this booking?</p>

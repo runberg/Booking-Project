@@ -20,7 +20,7 @@ function getTimezone(): string {
 
 export function formatIsoDateToDmy(isoDate: string): string {
   if (!isoDate || typeof isoDate !== 'string') return isoDate as any;
-  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
   if (!m) return isoDate;
   const [, y, mm, dd] = m;
   return `${dd}-${mm}-${y}`;

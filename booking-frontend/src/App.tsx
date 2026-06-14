@@ -25,6 +25,14 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <Navigate to="/bookings" replace />;
 };
 
+const RootRedirect: React.FC = () => {
+  const isAuthenticated = authService.isAuthenticated();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const user = authService.getCurrentUser();
+  if (user?.role === 'security') return <Navigate to="/security" replace />;
+  return <Navigate to="/bookings" replace />;
+};
+
 function App() {
   useEffect(() => {
     fetch(`${API_BASE_URL}/health/config`)
@@ -38,15 +46,7 @@ function App() {
       <div className="App">
         <React.Suspense fallback={null}>
         <Routes>
-          <Route path="/" element={
-            (() => {
-              const isAuthenticated = authService.isAuthenticated();
-              if (!isAuthenticated) return <Navigate to="/login" replace />;
-              const user = authService.getCurrentUser();
-              if (user?.role === 'security') return <Navigate to="/security" replace />;
-              return <Navigate to="/bookings" replace />;
-            })()
-          } />
+          <Route path="/" element={<RootRedirect />} />
           <Route 
             path="/register" 
             element={

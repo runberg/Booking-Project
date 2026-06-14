@@ -72,8 +72,8 @@ export const RegisterPage: React.FC = () => {
         if (data?.text) {
           setLegalText(data.text);
         }
-      } catch (e: any) {
-        console.warn('Failed to load legal text:', e);
+      } catch {
+        // If it fails, the default legal text is used
       }
     };
     loadLegalText();

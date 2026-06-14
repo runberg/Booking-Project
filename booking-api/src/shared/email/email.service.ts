@@ -91,7 +91,7 @@ export class EmailService {
       from: await this.getFromAddress(),
       to: email,
       subject: 'Verify Your Email Address',
-      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><p>${body.replace(/\n/g, '<br/>')}</p></div>`,
+      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><p>${body.replaceAll('\n', '<br/>')}</p></div>`,
     };
     await (await this.getTransporter()).sendMail(mailOptions);
   }

@@ -30,7 +30,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(BookingLog)
-    private logsRepo: Repository<BookingLog>,
+    private readonly logsRepo: Repository<BookingLog>,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<{ message: string }> {

@@ -68,8 +68,8 @@ const ALLOWED_HTML: sanitizeHtml.IOptions = {
 };
 
 function sanitizeEmailHtml(raw: string): string {
-  const withPlaceholder = raw.replace(
-    /href="{{cancelUrl}}"/g,
+  const withPlaceholder = raw.replaceAll(
+    'href="{{cancelUrl}}"',
     `href="${CANCEL_PLACEHOLDER}"`,
   );
   const sanitized = sanitizeHtml(withPlaceholder, ALLOWED_HTML);

@@ -56,7 +56,7 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
 export class EmailTemplatesService {
   constructor(
     @InjectRepository(EmailTemplate)
-    private repo: Repository<EmailTemplate>,
+    private readonly repo: Repository<EmailTemplate>,
   ) {}
 
   async getAll(): Promise<TemplateRecord[]> {

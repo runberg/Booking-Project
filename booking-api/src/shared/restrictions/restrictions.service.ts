@@ -11,7 +11,7 @@ import { BookingRestriction } from './booking-restriction.entity';
 export class RestrictionsService {
   constructor(
     @InjectRepository(BookingRestriction)
-    private restrictionsRepo: Repository<BookingRestriction>,
+    private readonly restrictionsRepo: Repository<BookingRestriction>,
   ) {}
 
   async listAll(): Promise<BookingRestriction[]> {
@@ -36,7 +36,7 @@ export class RestrictionsService {
     if (existing)
       throw new ConflictException('Restriction with this name already exists');
     const entity = this.restrictionsRepo.create({
-      name: data.name!,
+      name: data.name,
       daysAhead: data.daysAhead ?? 14,
       maxPerPeriod: data.maxPerPeriod ?? 2,
       maxPerDay: data.maxPerDay ?? 1,

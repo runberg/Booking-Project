@@ -37,6 +37,13 @@ interface SmtpSettings {
   smtp_pass_set: boolean;
 }
 
+const ROLE_BADGE_CLASSES: Record<string, string> = {
+  admin: 'bg-purple-100 text-purple-800',
+  super: 'bg-indigo-100 text-indigo-800',
+  security: 'bg-orange-100 text-orange-800',
+  user: 'bg-blue-100 text-blue-800',
+};
+
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
@@ -726,7 +733,7 @@ export const AdminDashboard: React.FC = () => {
                               </span>
                             </td>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden md:table-cell">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : user.role === 'super' ? 'bg-indigo-100 text-indigo-800' : user.role === 'security' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[user.role] ?? 'bg-blue-100 text-blue-800'}`}>
                                 {user.role}
                               </span>
                             </td>
@@ -1111,8 +1118,8 @@ export const AdminDashboard: React.FC = () => {
                         {/* Timing controls */}
                         {key === 'booking_reminder' && (
                           <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <label className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-                            <input type="number" min={1} max={168} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)} />
+                            <label htmlFor="timing-reminder-hours" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+                            <input id="timing-reminder-hours" type="number" min={1} max={168} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)} />
                             <span className="text-sm text-amber-900">hours before the booking</span>
                             <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
                               try { await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
@@ -1122,8 +1129,8 @@ export const AdminDashboard: React.FC = () => {
                         )}
                         {key === 'booking_checkin' && (
                           <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <label className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-                            <input type="number" min={0} max={120} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)} />
+                            <label htmlFor="timing-checkin-minutes" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+                            <input id="timing-checkin-minutes" type="number" min={0} max={120} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)} />
                             <span className="text-sm text-amber-900">minutes before the booking</span>
                             <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
                               try { await api.put('/admin/settings/reminder', { checkin_minutes_before: checkinMinutesBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
@@ -1135,8 +1142,9 @@ export const AdminDashboard: React.FC = () => {
 
                         {/* Subject line */}
                         <div className="mb-4">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
+                          <label htmlFor={`subject-${key}`} className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
                           <input
+                            id={`subject-${key}`}
                             type="text"
                             className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                             placeholder="Email subject…"
@@ -1191,8 +1199,9 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-sm text-gray-600 mb-6">Configure the outgoing mail server. Leave the password blank to keep the current password.</p>
                   <div className="space-y-4 max-w-lg">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+                      <label htmlFor="smtp-host" className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
                       <input
+                        id="smtp-host"
                         type="text"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="smtp.gmail.com"
@@ -1201,8 +1210,9 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
+                      <label htmlFor="smtp-port" className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
                       <input
+                        id="smtp-port"
                         type="number"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="587"
@@ -1211,8 +1221,9 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Username</label>
+                      <label htmlFor="smtp-user" className="block text-sm font-medium text-gray-700 mb-1">SMTP Username</label>
                       <input
+                        id="smtp-user"
                         type="text"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="user@example.com"
@@ -1221,8 +1232,9 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
+                      <label htmlFor="smtp-pass" className="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
                       <input
+                        id="smtp-pass"
                         type="password"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder={smtpSettings.smtp_pass_set ? '••••••••  (password set — enter new to change)' : 'Enter password'}
@@ -1232,8 +1244,9 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">From Address</label>
+                      <label htmlFor="smtp-from" className="block text-sm font-medium text-gray-700 mb-1">From Address</label>
                       <input
+                        id="smtp-from"
                         type="email"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         placeholder="noreply@example.com"
@@ -1283,8 +1296,9 @@ export const AdminDashboard: React.FC = () => {
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Event type</label>
+                      <label htmlFor="log-filter-action" className="block text-xs font-medium text-gray-600 mb-1">Event type</label>
                       <select
+                        id="log-filter-action"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm bg-white"
                         value={logsDraftFilters.action || ''}
                         onChange={(e) => setLogsDraftFilters((s) => ({ ...s, action: e.target.value || undefined }))}
@@ -1303,8 +1317,9 @@ export const AdminDashboard: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">User (email)</label>
+                      <label htmlFor="log-filter-email" className="block text-xs font-medium text-gray-600 mb-1">User (email)</label>
                       <input
+                        id="log-filter-email"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                         placeholder="Filter by email..."
                         value={logsDraftFilters.userEmail || ''}
@@ -1313,8 +1328,9 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Amenity</label>
+                      <label htmlFor="log-filter-amenity" className="block text-xs font-medium text-gray-600 mb-1">Amenity</label>
                       <input
+                        id="log-filter-amenity"
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                         placeholder="Filter by amenity..."
                         value={logsDraftFilters.amenityName || ''}
@@ -1324,8 +1340,9 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
+                        <label htmlFor="log-filter-from" className="block text-xs font-medium text-gray-600 mb-1">From</label>
                         <input
+                          id="log-filter-from"
                           type="date"
                           className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                           value={logsDraftFilters.dateFrom || ''}
@@ -1333,8 +1350,9 @@ export const AdminDashboard: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+                        <label htmlFor="log-filter-to" className="block text-xs font-medium text-gray-600 mb-1">To</label>
                         <input
+                          id="log-filter-to"
                           type="date"
                           className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                           value={logsDraftFilters.dateTo || ''}
@@ -1506,7 +1524,7 @@ export const AdminDashboard: React.FC = () => {
       {createSuperOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateSuperOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateSuperOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Super User</h3>
               <div className="space-y-3">
@@ -1538,7 +1556,7 @@ export const AdminDashboard: React.FC = () => {
       {createSecurityOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setCreateSecurityOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateSecurityOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-1">Create Security User</h3>
               <p className="text-sm text-gray-500 mb-4">Security users log in with their username and password. They have read-only access to the security dashboard.</p>

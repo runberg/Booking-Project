@@ -16,12 +16,12 @@ const ALLOWED_KEYS = new Set([
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
-  private cache = new Map<string, { v: string | null; at: number }>();
+  private readonly cache = new Map<string, { v: string | null; at: number }>();
   private readonly TTL = 60_000;
 
   constructor(
-    @InjectRepository(Setting) private repo: Repository<Setting>,
-    private configService: ConfigService,
+    @InjectRepository(Setting) private readonly repo: Repository<Setting>,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit() {

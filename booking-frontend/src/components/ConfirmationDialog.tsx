@@ -57,8 +57,10 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
         {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        <button
+          type="button"
+          aria-label="Close dialog"
+          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity cursor-default"
           onClick={onCancel}
         />
         
