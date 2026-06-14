@@ -7,12 +7,15 @@ function decorateVariables(html: string): string {
   const pill = (name: string) =>
     `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:0.85em">{{${name}}}</span>`;
 
-  // Alternate between HTML tags (group 1) and {{variable}} tokens (group 2).
-  // Tags are returned unchanged; variables in text nodes get the pill treatment.
-  return html.replace(/(<[^>]*>)|(\{\{(\w+)\}\})/g, (match, tag, _variable, varName) => {
-    if (tag) return tag;        // inside an HTML tag — leave untouched
-    return pill(varName);       // text node variable — decorate
-  });
+  // Split on HTML tags so the variable replacement only runs on text nodes,
+  // avoiding a combined alternation regex that SonarQube flags as ReDoS-prone.
+  return html
+    .split(/(<[^>]*>)/)
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // odd indices are captured HTML tags — leave untouched
+      return part.replace(/\{\{(\w+)\}\}/g, (_, varName: string) => pill(varName));
+    })
+    .join('');
 }
 
 interface Props {

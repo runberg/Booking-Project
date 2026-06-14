@@ -55,10 +55,10 @@ export class EmailService {
 
   private escapeHtml(s: string): string {
     return s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
   }
 
   private renderTemplateBody(
@@ -67,7 +67,7 @@ export class EmailService {
   ): string {
     return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m: string, key: string) => {
       const val = variables[key];
-      return val != null ? this.escapeHtml(val) : '';
+      return val == null ? '' : this.escapeHtml(val);
     });
   }
 
@@ -80,7 +80,7 @@ export class EmailService {
     token: string,
     name: string,
   ): Promise<void> {
-    const verificationUrl = `${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/verify-email?token=${token}`;
+    const verificationUrl = `${this.configService.get<string>('FRONTEND_URL', '')}/verify-email?token=${token}`;
     const tpl = await this.templates.getByKey('registration');
     const body = this.renderTemplateBody(
       tpl?.body ??
@@ -101,7 +101,7 @@ export class EmailService {
     token: string,
     name: string,
   ): Promise<void> {
-    const resetUrl = `${this.configService.get('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token=${token}`;
+    const resetUrl = `${this.configService.get<string>('FRONTEND_URL', '')}/reset-password?token=${token}`;
 
     const mailOptions = {
       from: await this.getFromAddress(),
@@ -143,7 +143,7 @@ export class EmailService {
       to: email,
       subject,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <p>${this.escapeHtml(text).replace(/\n/g, '<br/>')}</p>
+        <p>${this.escapeHtml(text).replaceAll('\n', '<br/>')}</p>
       </div>`,
     };
     await (await this.getTransporter()).sendMail(mailOptions);

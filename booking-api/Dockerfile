@@ -15,5 +15,6 @@ ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
+USER node
 EXPOSE 3000
 CMD ["node", "dist/main"]
