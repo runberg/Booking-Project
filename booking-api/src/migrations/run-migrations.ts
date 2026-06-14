@@ -1,15 +1,16 @@
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import { Logger } from '@nestjs/common';
 
-// Load environment variables
+const logger = new Logger('RunMigrations');
+
 config();
 
 export async function runMigrations() {
-  const dbPath = process.env.DB_PATH || '/data/booking.db';
+  const dbPath = process.env.DB_PATH ?? '/data/booking.db';
 
-  // Check if migrations directory exists and has migration files
   const migrationsDir = path.join(__dirname);
   let migrationFiles: string[] = [];
 
@@ -18,29 +19,32 @@ export async function runMigrations() {
     migrationFiles = files.filter(
       (f) => f.endsWith('.js') && f !== 'run-migrations.js',
     );
-  } catch (error) {
-    console.log('ℹ️  No migrations directory found - skipping migrations');
+  } catch (e: unknown) {
+    logger.debug(
+      `Migrations directory not readable, skipping: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return;
   }
 
   if (migrationFiles.length === 0) {
-    console.log('ℹ️  No migration files found - skipping migrations');
+    logger.log('No migration files found - skipping migrations');
     return;
   }
 
-  // Import entities dynamically to avoid constructor issues
-  let entities: any[];
+  let entities: unknown[];
   try {
-    const { User } = await import('../users/user.entity.js');
-    const { Building } = await import('../buildings/building.entity.js');
-    const { Amenity } = await import('../amenities/amenity.entity.js');
+    const { User } = await import('../shared/users/user.entity.js');
+    const { Building } = await import('../shared/buildings/building.entity.js');
+    const { Amenity } = await import('../shared/amenities/amenity.entity.js');
     const { BookingRestriction } = await import(
-      '../restrictions/booking-restriction.entity.js'
+      '../shared/restrictions/booking-restriction.entity.js'
     );
-    const { Booking } = await import('../bookings/booking.entity.js');
-    const { BookingLog } = await import('../bookings/booking-log.entity.js');
+    const { Booking } = await import('../shared/bookings/booking.entity.js');
+    const { BookingLog } = await import(
+      '../shared/bookings/booking-log.entity.js'
+    );
     const { EmailTemplate } = await import(
-      '../email-templates/email-template.entity.js'
+      '../shared/email-templates/email-template.entity.js'
     );
     entities = [
       User,
@@ -51,13 +55,11 @@ export async function runMigrations() {
       BookingLog,
       EmailTemplate,
     ];
-  } catch (error: any) {
-    console.warn(
-      '⚠️  Could not load entities for migrations:',
-      error.message || error,
-    );
-    console.warn(
-      '   Will skip migrations - database will use synchronize if needed',
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn(`Could not load entities for migrations: ${msg}`);
+    logger.warn(
+      'Will skip migrations - database will use synchronize if needed',
     );
     return;
   }
@@ -65,7 +67,7 @@ export async function runMigrations() {
   const dataSource = new DataSource({
     type: 'sqlite',
     database: dbPath,
-    entities: entities,
+    entities: entities as never[],
     migrations: migrationFiles.map((f) => path.join(__dirname, f)),
     synchronize: false,
     logging: false,
@@ -73,31 +75,29 @@ export async function runMigrations() {
 
   try {
     await dataSource.initialize();
-    console.log('📦 Running database migrations...');
+    logger.log('Running database migrations...');
     const migrations = await dataSource.runMigrations();
     if (migrations.length > 0) {
-      console.log(`✅ Applied ${migrations.length} migration(s)`);
-      migrations.forEach((m) => console.log(`   - ${m.name}`));
+      logger.log(`Applied ${migrations.length} migration(s)`);
+      migrations.forEach((m) => logger.log(`  - ${m.name}`));
     } else {
-      console.log('ℹ️  No pending migrations');
+      logger.log('No pending migrations');
     }
     await dataSource.destroy();
-  } catch (error: any) {
-    // Don't fail if migrations table doesn't exist yet (fresh install)
-    if (error.message && error.message.includes('no such table: migrations')) {
-      console.log(
-        'ℹ️  Migrations table not found - will be created on first migration',
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('no such table: migrations')) {
+      logger.log(
+        'Migrations table not found - will be created on first migration',
       );
-      try {
-        await dataSource.destroy();
-      } catch {}
+      await dataSource.destroy().catch(() => {
+        /* ignore cleanup errors */
+      });
       return;
     }
-    console.error('❌ Migration failed:', error.message || error);
-    try {
-      await dataSource.destroy();
-    } catch {}
-    // Don't throw - let synchronize handle fresh databases
-    return;
+    logger.error(`Migration failed: ${msg}`);
+    await dataSource.destroy().catch(() => {
+      /* ignore cleanup errors */
+    });
   }
 }

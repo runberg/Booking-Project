@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 import {
   Controller,
   Get,
@@ -13,21 +13,22 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { UsersService } from '../users/users.service';
-import { EmailService } from '../email/email.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { UserRole } from '../users/user.entity';
+import { UsersService } from '../shared/users/users.service';
+import { EmailService } from '../shared/email/email.service';
+import { JwtAuthGuard } from '../shared/auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../shared/guards/roles.guard';
+import { Roles } from '../shared/decorators/roles.decorator';
+import { UserRole } from '../shared/users/user.entity';
+import type { RequestWithUser } from '../shared/types/request-with-user';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPER)
 export class AdminController {
   constructor(
-    private adminService: AdminService,
-    private usersService: UsersService,
-    private emailService: EmailService,
+    private readonly adminService: AdminService,
+    private readonly usersService: UsersService,
+    private readonly emailService: EmailService,
   ) {}
 
   @Get('users')
@@ -47,7 +48,7 @@ export class AdminController {
   }
 
   @Delete('users/:id')
-  async deleteUser(@Param('id') id: string, @Request() req) {
+  async deleteUser(@Param('id') id: string, @Request() req: RequestWithUser) {
     if (req.user.id === id) {
       throw new ForbiddenException('Cannot delete your own account');
     }
@@ -82,7 +83,6 @@ export class AdminController {
   }
 
   @Post('users/:id/role')
-  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async changeUserRole(
     @Param('id') id: string,
     @Body() body: { role: UserRole },
@@ -95,46 +95,58 @@ export class AdminController {
   }
 
   @Post('users')
-  @Roles(UserRole.ADMIN, UserRole.SUPER)
   async createUser(
     @Body()
     body: {
-      // regular / super user fields
       email?: string;
       name?: string;
       building?: string;
       apartmentNumber?: string;
       isSuper?: boolean;
-      // security user fields
       username?: string;
       isSecurity?: boolean;
-      // shared
       password: string;
     },
-    @Request() req,
+    @Request() req: RequestWithUser,
   ) {
-    let email: string;
-    let name: string;
-    let building: string;
-    let apartmentNumber: string;
-
-    if (!body.password || body.password.length < 8 || body.password.length > 128) {
-      throw new BadRequestException('Password must be between 8 and 128 characters');
+    if (
+      !body.password ||
+      body.password.length < 8 ||
+      body.password.length > 128
+    ) {
+      throw new BadRequestException(
+        'Password must be between 8 and 128 characters',
+      );
     }
 
     if (body.isSuper && req.user.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Only admins can create super users');
     }
 
+    let email: string;
+    let name: string;
+    let building: string;
+    let apartmentNumber: string;
+
     if (body.isSecurity) {
-      if (!body.username) throw new BadRequestException('username is required for security users');
+      if (!body.username)
+        throw new BadRequestException(
+          'username is required for security users',
+        );
       email = `${body.username}@security.local`;
       name = body.username;
       building = 'Security';
       apartmentNumber = body.username;
     } else {
-      if (!body.email || !body.name || !body.building || !body.apartmentNumber) {
-        throw new BadRequestException('email, name, building and apartmentNumber are required');
+      if (
+        !body.email ||
+        !body.name ||
+        !body.building ||
+        !body.apartmentNumber
+      ) {
+        throw new BadRequestException(
+          'email, name, building and apartmentNumber are required',
+        );
       }
       email = body.email;
       name = body.name;
@@ -142,7 +154,13 @@ export class AdminController {
       apartmentNumber = body.apartmentNumber;
     }
 
-    const user = await this.usersService.create({ email, password: body.password, name, building, apartmentNumber } as any);
+    const user = await this.usersService.create({
+      email,
+      password: body.password,
+      name,
+      building,
+      apartmentNumber,
+    });
     await this.usersService.updateEmailVerification(user.id, true);
     if (body.isSuper) {
       await this.usersService.updateUserRole(user.id, UserRole.SUPER);

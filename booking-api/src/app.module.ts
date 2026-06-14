@@ -5,29 +5,20 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { HealthController } from './health.controller';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
-import { User } from './users/user.entity';
-import { Building } from './buildings/building.entity';
-import { BuildingUnit } from './buildings/building-unit.entity';
-import { BuildingsModule } from './buildings/buildings.module';
-import { Amenity } from './amenities/amenity.entity';
-import { AmenitiesModule } from './amenities/amenities.module';
-import { BookingRestriction } from './restrictions/booking-restriction.entity';
-import { RestrictionsModule } from './restrictions/restrictions.module';
-import { Booking } from './bookings/booking.entity';
-import { BookingLog } from './bookings/booking-log.entity';
-import { BookingCancelToken } from './bookings/booking-cancel-token.entity';
-import { BookingCheckinToken } from './bookings/booking-checkin-token.entity';
-import { BookingsModule } from './bookings/bookings.module';
-import { RemindersModule } from './reminders/reminders.module';
-import { EmailTemplate } from './email-templates/email-template.entity';
-import { EmailTemplatesModule } from './email-templates/email-templates.module';
-import { Setting } from './settings/setting.entity';
-import { SettingsModule } from './settings/settings.module';
-import { SecurityModule } from './security/security.module';
+import { PortalModule } from './portal/portal.module';
+import { RemindersModule } from './shared/reminders/reminders.module';
+import { User } from './shared/users/user.entity';
+import { Building } from './shared/buildings/building.entity';
+import { BuildingUnit } from './shared/buildings/building-unit.entity';
+import { Amenity } from './shared/amenities/amenity.entity';
+import { BookingRestriction } from './shared/restrictions/booking-restriction.entity';
+import { Booking } from './shared/bookings/booking.entity';
+import { BookingLog } from './shared/bookings/booking-log.entity';
+import { BookingCancelToken } from './shared/bookings/booking-cancel-token.entity';
+import { BookingCheckinToken } from './shared/bookings/booking-checkin-token.entity';
+import { EmailTemplate } from './shared/email-templates/email-template.entity';
+import { Setting } from './shared/settings/setting.entity';
 
 @Module({
   imports: [
@@ -50,27 +41,15 @@ import { SecurityModule } from './security/security.module';
           EmailTemplate,
           Setting,
         ],
-        // synchronize creates/alters tables automatically on every startup.
         synchronize: true,
         logging: configService.get('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],
     }),
-    ThrottlerModule.forRoot([
-      { ttl: 60_000, limit: 60 },
-    ]),
-    AuthModule,
-    UsersModule,
-    EmailModule,
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     AdminModule,
-    BuildingsModule,
-    AmenitiesModule,
-    RestrictionsModule,
-    BookingsModule,
+    PortalModule,
     RemindersModule,
-    EmailTemplatesModule,
-    SettingsModule,
-    SecurityModule,
   ],
   controllers: [AppController, HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
