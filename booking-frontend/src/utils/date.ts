@@ -11,7 +11,7 @@ export function setServerTimezone(tz: string): void {
 
 function getTimezone(): string {
   // Primary: injected synchronously by the container at startup into env.js
-  const injected = (window as any).__SERVER_TZ__;
+  const injected = (globalThis as any).__SERVER_TZ__;
   if (injected) return injected as string;
   // Fallback: saved to localStorage by the async fetch in App.tsx
   try { return localStorage.getItem('serverTimezone') || 'UTC'; }
@@ -42,7 +42,7 @@ export function formatDateTimeDmy(input: string): string {
     /Z$|[+-]\d{2}:\d{2}$/.test(input) ? input : input + 'Z';
 
   const d = new Date(normalized);
-  if (isNaN(d.getTime())) return input;
+  if (Number.isNaN(d.getTime())) return input;
 
   // Read timezone on every call so it's always current (fetched async from server).
   const timezone = getTimezone();

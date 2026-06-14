@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { RegisterPage } from './pages/RegisterPage';
 import { LoginPage } from './pages/LoginPage';
@@ -25,14 +25,14 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <Navigate to="/bookings" replace />;
 };
 
-// Fetch server timezone once on load so all timestamps display in the
-// server's configured timezone regardless of the browser's local timezone.
-fetch(`${API_BASE_URL}/health/config`)
-  .then((r) => r.json())
-  .then((d) => { if (d?.timezone) setServerTimezone(d.timezone); })
-  .catch(() => {});
-
 function App() {
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/health/config`)
+      .then((r) => r.json())
+      .then((d: { timezone?: string }) => { if (d?.timezone) setServerTimezone(d.timezone); })
+      .catch(() => {});
+  }, []);
+
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="App">
