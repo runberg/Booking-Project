@@ -83,6 +83,38 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
   return copy;
 }
 
+function TabLoadingSpinner({ message }: { message: string }) {
+  return (
+    <div className="text-center py-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+      <p className="mt-2 text-sm text-gray-600">{message}</p>
+    </div>
+  );
+}
+
+type TimingControlProps = {
+  id: string;
+  unit: string;
+  min: number;
+  max: number;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSave: () => void;
+  note?: string;
+};
+
+function TimingControl({ id, unit, min, max, value, onChange, onSave, note }: TimingControlProps) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+      <label htmlFor={id} className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
+      <input id={id} type="number" min={min} max={max} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={value} onChange={onChange} />
+      <span className="text-sm text-amber-900">{unit} before the booking</span>
+      <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={onSave}>Save</button>
+      {note && <p className="w-full text-xs text-amber-700 mt-1">{note}</p>}
+    </div>
+  );
+}
+
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
@@ -531,12 +563,7 @@ export const AdminDashboard: React.FC = () => {
 
   const renderBuildingsContent = () => {
     if (isLoadingBuildings) {
-      return (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">Loading buildings...</p>
-        </div>
-      );
+      return <TabLoadingSpinner message="Loading buildings..." />;
     }
     if (buildings.length === 0) {
       return <p className="text-sm text-gray-600">No buildings yet. Add one above.</p>;
@@ -651,12 +678,7 @@ export const AdminDashboard: React.FC = () => {
 
   const renderEmailsContent = () => {
     if (isLoadingEmails) {
-      return (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">Loading templates...</p>
-        </div>
-      );
+      return <TabLoadingSpinner message="Loading templates..." />;
     }
     if (contentSubTab === 'rules') {
       return (
@@ -793,27 +815,25 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-sm text-gray-600 mb-4">{description}</p>
 
               {key === 'booking_reminder' && (
-                <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                  <label htmlFor="timing-reminder-hours" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-                  <input id="timing-reminder-hours" type="number" min={1} max={168} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)} />
-                  <span className="text-sm text-amber-900">hours before the booking</span>
-                  <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
+                <TimingControl
+                  id="timing-reminder-hours" unit="hours" min={1} max={168}
+                  value={reminderHoursBefore} onChange={(e) => setReminderHoursBefore(e.target.value)}
+                  onSave={async () => {
                     try { await api.put('/admin/settings/reminder', { reminder_hours_before: reminderHoursBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
                     catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
-                  }}>Save</button>
-                </div>
+                  }}
+                />
               )}
               {key === 'booking_checkin' && (
-                <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                  <label htmlFor="timing-checkin-minutes" className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-                  <input id="timing-checkin-minutes" type="number" min={0} max={120} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)} />
-                  <span className="text-sm text-amber-900">minutes before the booking</span>
-                  <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={async () => {
+                <TimingControl
+                  id="timing-checkin-minutes" unit="minutes" min={0} max={120}
+                  value={checkinMinutesBefore} onChange={(e) => setCheckinMinutesBefore(e.target.value)}
+                  onSave={async () => {
                     try { await api.put('/admin/settings/reminder', { checkin_minutes_before: checkinMinutesBefore }); setNotification({ type: 'success', message: 'Timing saved' }); }
                     catch (e: any) { setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' }); }
-                  }}>Save</button>
-                  <p className="w-full text-xs text-amber-700 mt-1">Note: exact send time depends on the scheduler interval (default every 10 min).</p>
-                </div>
+                  }}
+                  note="Note: exact send time depends on the scheduler interval (default every 10 min)."
+                />
               )}
 
               <div className="mb-4">
@@ -1061,10 +1081,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {isLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-                  <p className="mt-2 text-sm text-gray-600">Loading users...</p>
-                </div>
+                <TabLoadingSpinner message="Loading users..." />
               ) : (
                 <div className="overflow-x-auto -mx-6 sm:mx-0">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -1207,10 +1224,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {isLoadingSettings ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-                  <p className="mt-2 text-sm text-gray-600">Loading settings...</p>
-                </div>
+                <TabLoadingSpinner message="Loading settings..." />
               ) : (
                 <Card>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">SMTP / Email</h3>
