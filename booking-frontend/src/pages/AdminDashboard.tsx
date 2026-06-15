@@ -10,6 +10,7 @@ import { RichEmailEditor } from '../components/RichEmailEditor';
 import { authService, api, API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
 import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
+import { TimingControl } from '../components/TimingControl';
 
 interface User {
   id: string;
@@ -82,29 +83,6 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
     copy.push({ key: patch.key, subject: patch.subject ?? null, body: patch.body ?? '' });
   }
   return copy;
-}
-
-type TimingControlProps = Readonly<{
-  id: string;
-  unit: string;
-  min: number;
-  max: number;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onSave: () => void;
-  note?: string;
-}>;
-
-function TimingControl({ id, unit, min, max, value, onChange, onSave, note }: TimingControlProps) {
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-      <label htmlFor={id} className="text-sm font-medium text-amber-900 whitespace-nowrap">Send</label>
-      <input id={id} type="number" min={min} max={max} className="w-16 rounded-md border border-amber-300 py-1.5 px-2 text-sm text-center" value={value} onChange={onChange} />
-      <span className="text-sm text-amber-900">{unit} before the booking</span>
-      <button className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap" onClick={onSave}>Save</button>
-      {note && <p className="w-full text-xs text-amber-700 mt-1">{note}</p>}
-    </div>
-  );
 }
 
 export const AdminDashboard: React.FC = () => {
@@ -1035,29 +1013,13 @@ export const AdminDashboard: React.FC = () => {
                 {roleInfoOpen && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-200 border-t border-gray-200">
                     {[
-                      {
-                        badge: 'bg-blue-100 text-blue-800',
-                        label: 'User',
-                        description: 'Regular resident. Can create and cancel their own bookings within the configured restrictions.',
-                      },
-                      {
-                        badge: 'bg-indigo-100 text-indigo-800',
-                        label: 'Super',
-                        description: 'Trusted staff. Full read and manage access — buildings, amenities, logs, settings — but cannot create or promote user accounts.',
-                      },
-                      {
-                        badge: 'bg-purple-100 text-purple-800',
-                        label: 'Admin',
-                        description: 'Full access. Can create and manage all user accounts, assign roles, and configure every part of the system.',
-                      },
-                      {
-                        badge: 'bg-orange-100 text-orange-800',
-                        label: 'Security',
-                        description: 'Read-only view of the security dashboard. Can see the current and next booking for every amenity with full resident details. Cannot make bookings.',
-                      },
-                    ].map(({ badge, label, description }) => (
+                      { role: 'user', label: 'User', description: 'Regular resident. Can create and cancel their own bookings within the configured restrictions.' },
+                      { role: 'super', label: 'Super', description: 'Trusted staff. Full read and manage access — buildings, amenities, logs, settings — but cannot create or promote user accounts.' },
+                      { role: 'admin', label: 'Admin', description: 'Full access. Can create and manage all user accounts, assign roles, and configure every part of the system.' },
+                      { role: 'security', label: 'Security', description: 'Read-only view of the security dashboard. Can see the current and next booking for every amenity with full resident details. Cannot make bookings.' },
+                    ].map(({ role, label, description }) => (
                       <div key={label} className="px-4 py-3 space-y-1.5">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${badge}`}>{label}</span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[role] ?? 'bg-gray-100 text-gray-800'}`}>{label}</span>
                         <p className="text-xs text-gray-600 leading-relaxed">{description}</p>
                       </div>
                     ))}
