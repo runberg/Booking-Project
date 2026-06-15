@@ -29,7 +29,7 @@ function dayButtonClass(disabled: boolean, isSelected: boolean): string {
 
 type CalendarDay = string | null;
 
-function CalendarGrid({ calendarWeeks, myBookings, selected, selectedDate, setSelectedDate, setSelectedTime, setInfoMessage }: {
+function CalendarGrid({ calendarWeeks, myBookings, selected, selectedDate, setSelectedDate, setSelectedTime, setInfoMessage }: Readonly<{
   calendarWeeks: CalendarDay[][];
   myBookings: Array<{ amenityId: string; date: string }>;
   selected: AmenityPublic | null;
@@ -37,7 +37,7 @@ function CalendarGrid({ calendarWeeks, myBookings, selected, selectedDate, setSe
   setSelectedDate: (date: string) => void;
   setSelectedTime: (time: string) => void;
   setInfoMessage: (msg: string) => void;
-}) {
+}>) {
   return (
     <div className="border border-gray-200 rounded-md p-2 sm:p-3 max-h-80 overflow-y-auto">
       <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-xs font-medium text-gray-600">

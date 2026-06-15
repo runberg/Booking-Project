@@ -83,7 +83,7 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
   return copy;
 }
 
-function TabLoadingSpinner({ message }: { message: string }) {
+function TabLoadingSpinner({ message }: Readonly<{ message: string }>) {
   return (
     <div className="text-center py-8">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
@@ -92,7 +92,7 @@ function TabLoadingSpinner({ message }: { message: string }) {
   );
 }
 
-type TimingControlProps = {
+type TimingControlProps = Readonly<{
   id: string;
   unit: string;
   min: number;
@@ -101,7 +101,7 @@ type TimingControlProps = {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSave: () => void;
   note?: string;
-};
+}>;
 
 function TimingControl({ id, unit, min, max, value, onChange, onSave, note }: TimingControlProps) {
   return (
@@ -568,6 +568,8 @@ export const AdminDashboard: React.FC = () => {
     if (buildings.length === 0) {
       return <p className="text-sm text-gray-600">No buildings yet. Add one above.</p>;
     }
+    const handleUnitInputChange = (buildingId: string, value: string) =>
+      setUnitInputs((s) => ({ ...s, [buildingId]: value }));
     return (
       <div className="space-y-3">
         {buildings.map((b) => (
@@ -654,7 +656,7 @@ export const AdminDashboard: React.FC = () => {
                         className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px] font-mono"
                         placeholder={'101\n102\n103\n201\n202'}
                         value={unitInputs[b.id] ?? ''}
-                        onChange={(e) => setUnitInputs((s) => ({ ...s, [b.id]: e.target.value }))}
+                        onChange={(e) => handleUnitInputChange(b.id, e.target.value)}
                       />
                     </div>
                     <div className="flex justify-end">
@@ -677,6 +679,19 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const renderEmailsContent = () => {
+    const handleLegalBodyChange = (k: string, body: string) =>
+      setEmailTemplates((prev) => patchEmailTemplate(prev, { key: k, body }));
+    const saveLegalText = async (k: string, defaultBody: string) => {
+      try {
+        const body = emailTemplates.find((x) => x.key === k)?.body ?? defaultBody;
+        await api.put(`/admin/email-templates/${k}`, { body });
+        setNotification({ type: 'success', message: 'Legal text saved' });
+      } catch (e: any) {
+        setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
+      }
+    };
+    const handleSubjectChange = (k: string, val: string) =>
+      setEmailTemplates((prev) => patchEmailTemplate(prev, { key: k, subject: val }));
     if (isLoadingEmails) {
       return <TabLoadingSpinner message="Loading templates..." />;
     }
@@ -738,18 +753,10 @@ export const AdminDashboard: React.FC = () => {
                 <textarea
                   className="w-full min-h-[100px] rounded-md border border-gray-300 p-3 text-sm font-mono"
                   value={emailTemplates.find((x) => x.key === key)?.body || defaultBody}
-                  onChange={(e) => setEmailTemplates((prev) => patchEmailTemplate(prev, { key, body: e.target.value }))}
+                  onChange={(e) => handleLegalBodyChange(key, e.target.value)}
                 />
                 <div className="mt-2 flex justify-end">
-                  <Button onClick={async () => {
-                    try {
-                      const body = emailTemplates.find((x) => x.key === key)?.body ?? defaultBody;
-                      await api.put(`/admin/email-templates/${key}`, { body });
-                      setNotification({ type: 'success', message: 'Legal text saved' });
-                    } catch (e: any) {
-                      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to save' });
-                    }
-                  }}>Save</Button>
+                  <Button onClick={() => saveLegalText(key, defaultBody)}>Save</Button>
                 </div>
               </div>
             ))}
@@ -807,7 +814,6 @@ export const AdminDashboard: React.FC = () => {
         ].map(({ key, title, description, variables }) => {
           const tpl = emailTemplates.find((x) => x.key === key);
           const subject = tpl?.subject ?? '';
-          const setSubject = (val: string) => setEmailTemplates((prev) => patchEmailTemplate(prev, { key, subject: val }));
 
           return (
             <Card key={key}>
@@ -844,7 +850,7 @@ export const AdminDashboard: React.FC = () => {
                   className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
                   placeholder="Email subject…"
                   value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  onChange={(e) => handleSubjectChange(key, e.target.value)}
                 />
                 <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are also supported in the subject.</p>
               </div>
