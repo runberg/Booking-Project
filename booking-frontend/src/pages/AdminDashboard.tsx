@@ -9,6 +9,7 @@ import { AmenitiesAdmin } from './AmenitiesAdmin';
 import { RichEmailEditor } from '../components/RichEmailEditor';
 import { authService, api, API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
+import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
 
 interface User {
   id: string;
@@ -81,15 +82,6 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
     copy.push({ key: patch.key, subject: patch.subject ?? null, body: patch.body ?? '' });
   }
   return copy;
-}
-
-function TabLoadingSpinner({ message }: Readonly<{ message: string }>) {
-  return (
-    <div className="text-center py-8">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-      <p className="mt-2 text-sm text-gray-600">{message}</p>
-    </div>
-  );
 }
 
 type TimingControlProps = Readonly<{

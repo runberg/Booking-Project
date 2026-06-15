@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy } from '../utils/date';
+import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
 
 type Preview = {
   amenityName: string;
@@ -135,10 +136,7 @@ export const CheckinPage: React.FC = () => {
 
         <Card>
           {stage === 'loading' && (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-              <p className="mt-3 text-sm text-gray-600">Loading booking details…</p>
-            </div>
+            <TabLoadingSpinner message="Loading booking details…" />
           )}
 
           {(stage === 'ready' || stage === 'scanning') && preview && (
