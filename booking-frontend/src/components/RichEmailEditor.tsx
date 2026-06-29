@@ -36,6 +36,8 @@ interface Props {
   initialValue: string;
   variables: { tag: string; label: string }[];
   showCancelButton?: boolean;
+  showVerifyButton?: boolean;
+  showCheckinButton?: boolean;
   onMount: (el: HTMLDivElement | null) => void;
 }
 
@@ -43,6 +45,8 @@ export const RichEmailEditor: React.FC<Props> = ({
   initialValue,
   variables,
   showCancelButton = false,
+  showVerifyButton = false,
+  showCheckinButton = false,
   onMount,
 }) => {
   const editorRef = React.useRef<HTMLDivElement | null>(null);
@@ -109,6 +113,36 @@ export const RichEmailEditor: React.FC<Props> = ({
             + {label}
           </button>
         ))}
+        {showCheckinButton && (
+          <button
+            type="button"
+            title="Insert check-in button"
+            className="px-2 py-0.5 text-xs border border-blue-200 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium select-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              insertHTML(
+                '<div style="text-align:center"><a href="{{checkinUrl}}" style="background-color:#2563eb;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Check In</a></div>',
+              );
+            }}
+          >
+            + Check-in Button
+          </button>
+        )}
+        {showVerifyButton && (
+          <button
+            type="button"
+            title="Insert verify email button"
+            className="px-2 py-0.5 text-xs border border-green-200 rounded bg-green-50 hover:bg-green-100 text-green-700 font-medium select-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              insertHTML(
+                '<div style="text-align:center"><a href="{{verificationUrl}}" style="background-color:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Verify Email</a></div>',
+              );
+            }}
+          >
+            + Verify Button
+          </button>
+        )}
         {showCancelButton && (
           <button
             type="button"

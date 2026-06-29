@@ -1117,6 +1117,8 @@ export const AdminDashboard: React.FC = () => {
               <RichEmailEditor
                 initialValue={tpl?.body ?? ''}
                 variables={variables.map(v => ({ tag: v.tag, label: v.desc.split(' ').slice(0, 2).join(' ') }))}
+                showCheckinButton={key === 'booking_checkin'}
+                showVerifyButton={key === 'registration'}
                 showCancelButton={key === 'booking_reminder'}
                 onMount={(el) => { editorDomRefs.current[key] = el; }}
               />

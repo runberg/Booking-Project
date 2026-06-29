@@ -32,6 +32,8 @@ const HTML_TEMPLATE_KEYS = new Set([
 const URL_PLACEHOLDERS: Array<[string, string]> = [
   ['href="{{cancelUrl}}"', 'https://cancel-token.placeholder.local'],
   ['href="{{adminUrl}}"', 'https://admin-url.placeholder.local'],
+  ['href="{{verificationUrl}}"', 'https://verification-url.placeholder.local'],
+  ['href="{{checkinUrl}}"', 'https://checkin-url.placeholder.local'],
 ];
 
 const ALLOWED_HTML: sanitizeHtml.IOptions = {
