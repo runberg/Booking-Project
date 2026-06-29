@@ -12,6 +12,8 @@ const ALLOWED_KEYS = new Set([
   'smtp_from',
   'reminder_hours_before',
   'checkin_minutes_before',
+  'checkin_enabled',
+  'admin_approval_required',
 ]);
 
 @Injectable()
@@ -39,6 +41,8 @@ export class SettingsService implements OnModuleInit {
         'CHECKIN_MINUTES_BEFORE',
         '30',
       ),
+      checkin_enabled: 'true',
+      admin_approval_required: 'false',
     };
     for (const [key, value] of Object.entries(defaults)) {
       const existing = await this.repo.findOne({ where: { key } });

@@ -91,6 +91,8 @@ export const BookingPage: React.FC = () => {
   const [step, setStep] = useState<'select' | 'confirm'>('select');
   const [bookedTimes, setBookedTimes] = useState<string[]>([]);
   const currentUser = authService.getCurrentUser();
+  const isPendingApproval = currentUser?.isApproved === false;
+  const [pendingApprovalMessage, setPendingApprovalMessage] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; bookingId: string | null }>(() => ({ open: false, bookingId: null }));
   const [infoMessage, setInfoMessage] = useState<string>('');
   const [upcoming, setUpcoming] = useState<Array<{ id: string; amenityName: string; date: string; startTime: string; slotLength: number; userName: string; building: string; apartmentNumber: string }>>([]);
@@ -194,6 +196,13 @@ export const BookingPage: React.FC = () => {
     };
     loadBookingLegalText();
   }, []);
+
+  useEffect(() => {
+    if (!isPendingApproval) return;
+    api.get('/email-templates/approval-content')
+      .then(({ data }) => { if (data?.loggedInMessage) setPendingApprovalMessage(data.loggedInMessage); })
+      .catch(() => {});
+  }, [isPendingApproval]);
 
   // Build calendar weeks (Mon-Sun) from today to today+daysAhead
   const calendarWeeks = useMemo(() => {
@@ -563,6 +572,7 @@ export const BookingPage: React.FC = () => {
                 {(currentUser?.role === 'admin' || currentUser?.role === 'super') && (
                   <Button onClick={() => navigate('/admin')} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Admin</Button>
                 )}
+                <Button variant="secondary" onClick={() => navigate('/profile')} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Profile</Button>
                 <Button variant="secondary" onClick={handleLogout} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Logout</Button>
               </div>
             </div>
@@ -573,64 +583,81 @@ export const BookingPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="sr-only">Book an Amenity</h1>
 
-        {error && (
+        {isPendingApproval && (
+          <Card>
+            <div className="py-2">
+              <h2 className="text-base font-semibold text-gray-900 mb-3">Account Pending Approval</h2>
+              <p className="text-sm text-gray-600">
+                {pendingApprovalMessage || 'Your account is pending admin approval. You will be notified by email once your account has been approved and you can start making bookings.'}
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!isPendingApproval && error && (
           <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4 text-sm text-red-700">{error}</div>
         )}
 
-        {/* My Upcoming Bookings Section */}
-        <div className="mt-6">
-          <Card>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">My upcoming bookings</h2>
-            {myBookings.length === 0 ? (
-              <p className="text-sm text-gray-600">You have no upcoming bookings.</p>
-            ) : (
-              <ul className="divide-y divide-gray-200">
-                {myBookings.map((b) => (
-                  <li key={b.id} className="py-3 flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
-                      <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
-                    </div>
-                    <button
-                      onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}
-                      className="flex-shrink-0 p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-                      aria-label="Delete booking"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-
-        {/* Past Bookings Section */}
-        <div className="mt-3">
-          <button
-            className="text-sm font-medium text-primary-600 hover:text-primary-800 flex items-center gap-1 py-1"
-            onClick={() => {
-              if (!showPast) loadPastBookings(1);
-              setShowPast((s) => !s);
-            }}
-          >
-            <span>{showPast ? '▲' : '▼'}</span>
-            <span>{showPast ? 'Hide past bookings' : 'Show past bookings'}</span>
-          </button>
-          {showPast && (
-            <div className="mt-3">
+        {/* My Upcoming Bookings + Past Bookings */}
+        {!isPendingApproval && (
+          <>
+            <div className="mt-6">
               <Card>
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Past bookings</h2>
-                {renderPastBookingsContent()}
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">My upcoming bookings</h2>
+                {myBookings.length === 0 ? (
+                  <p className="text-sm text-gray-600">You have no upcoming bookings.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-200">
+                    {myBookings.map((b) => (
+                      <li key={b.id} className="py-3 flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-900">{amenities.find((a) => a.id === b.amenityId)?.name || 'Amenity'}</div>
+                          <div className="text-sm text-gray-600 mt-1">{formatIsoDateToDmy(b.date)} {b.startTime} ({b.slotLength} min)</div>
+                        </div>
+                        <button
+                          onClick={() => setDeleteConfirm({ open: true, bookingId: b.id })}
+                          className="flex-shrink-0 p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                          aria-label="Delete booking"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Card>
             </div>
-          )}
-        </div>
+
+            {/* Past Bookings Section */}
+            <div className="mt-3">
+              <button
+                className="text-sm font-medium text-primary-600 hover:text-primary-800 flex items-center gap-1 py-1"
+                onClick={() => {
+                  if (!showPast) loadPastBookings(1);
+                  setShowPast((s) => !s);
+                }}
+              >
+                <span>{showPast ? '▲' : '▼'}</span>
+                <span>{showPast ? 'Hide past bookings' : 'Show past bookings'}</span>
+              </button>
+              {showPast && (
+                <div className="mt-3">
+                  <Card>
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Past bookings</h2>
+                    {renderPastBookingsContent()}
+                  </Card>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Amenities Section */}
-        <div className="mt-8">
-        {renderAmenitiesSection()}
-        </div>
+        {!isPendingApproval && (
+          <div className="mt-8">
+            {renderAmenitiesSection()}
+          </div>
+        )}
 
         {selected && (
           <div className="fixed inset-0 z-50">

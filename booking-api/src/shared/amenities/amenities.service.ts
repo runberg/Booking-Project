@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { randomBytes } from 'node:crypto';
 import { Amenity } from './amenity.entity';
 import { BookingRestriction } from '../restrictions/booking-restriction.entity';
@@ -98,5 +98,16 @@ export class AmenitiesService {
     if (!amenity) throw new NotFoundException('Amenity not found');
     amenity.qrToken = randomBytes(16).toString('hex');
     return this.amenitiesRepository.save(amenity);
+  }
+
+  async ensureQrTokens(): Promise<number> {
+    const amenities = await this.amenitiesRepository.find({
+      where: { qrToken: IsNull() },
+    });
+    for (const amenity of amenities) {
+      amenity.qrToken = randomBytes(16).toString('hex');
+      await this.amenitiesRepository.save(amenity);
+    }
+    return amenities.length;
   }
 }

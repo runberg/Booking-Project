@@ -50,6 +50,46 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
     subject: '',
     body: 'The QR code does not match your booked amenity. Please make sure you are at the correct location and try again.',
   },
+  pending_approval_message: {
+    subject: '',
+    body: 'Your email has been verified. Your account is now awaiting admin approval before you can make bookings. This can take up to 24 hours. You will receive an email once your account has been approved.',
+  },
+  pending_approval_logged_in: {
+    subject: '',
+    body: 'Your account is pending admin approval. You will be notified by email once your account has been approved and you can start making bookings.',
+  },
+  admin_approval_notification: {
+    subject: 'Users awaiting admin approval',
+    body: '<p>There are currently <strong>{{count}}</strong> user(s) awaiting admin approval.</p><p>Please log in to the admin panel to review and approve or reject them.</p><div style="text-align:center;margin:24px 0"><a href="{{adminUrl}}" style="background-color:#2563eb;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Go to Admin Panel</a></div>',
+  },
+  user_approved: {
+    subject: 'Your account has been approved',
+    body: '<p>Hello {{name}},</p><p>Your account has been approved. You can now log in and start making bookings.</p>',
+  },
+  user_rejected: {
+    subject: 'Account application not approved',
+    body: '<p>Hello {{name}},</p><p>Unfortunately your account application has not been approved. Please contact the building management for more information.</p>',
+  },
+  site_footer_text: {
+    subject: '',
+    body: '© {{year}} All rights reserved.',
+  },
+  email_footer: {
+    subject: '',
+    body: 'This is an automated email that you cannot reply to. For any issues or concerns, kindly reach out to Administration.',
+  },
+  booking_deleted_by_admin: {
+    subject: 'Your booking has been cancelled',
+    body: '<p>Hello {{name}},</p><p>Your booking for <strong>{{amenity}}</strong> on {{date}} at {{time}} has been cancelled by an administrator. If you have any questions, please contact building management.</p>',
+  },
+  user_access_revoked: {
+    subject: 'Your booking access has been suspended',
+    body: '<p>Hello {{name}},</p><p>Your access to make bookings has been temporarily suspended by an administrator. If you have any questions, please contact building management.</p>',
+  },
+  user_account_deleted: {
+    subject: 'Your account has been removed',
+    body: '<p>Hello {{name}},</p><p>Your account has been removed by an administrator. If you believe this is an error, please contact building management.</p>',
+  },
 };
 
 @Injectable()

@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { SettingsService } from '../../shared/settings/settings.service';
 import { EmailService } from '../../shared/email/email.service';
+import { AmenitiesService } from '../../shared/amenities/amenities.service';
+import { UsersService } from '../../shared/users/users.service';
 import { JwtAuthGuard } from '../../shared/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -32,6 +34,8 @@ export class SettingsController {
     private readonly settingsService: SettingsService,
     @Inject(forwardRef(() => EmailService))
     private readonly emailService: EmailService,
+    private readonly amenitiesService: AmenitiesService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Post('smtp/test')
@@ -75,6 +79,7 @@ export class SettingsController {
         await this.settingsService.set(key, value || null);
       }
     }
+    this.emailService.invalidateTransporter();
     return this.settingsService.getSmtpSettings();
   }
 
@@ -120,5 +125,54 @@ export class SettingsController {
       reminder_hours_before: hours ?? '24',
       checkin_minutes_before: minutes ?? '30',
     };
+  }
+
+  @Get('checkin')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async getCheckinEnabled() {
+    const val = await this.settingsService.get('checkin_enabled');
+    return { enabled: val !== 'false' };
+  }
+
+  @Put('checkin')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async updateCheckinEnabled(
+    @Body() body: { enabled: boolean },
+  ): Promise<{ enabled: boolean; newQrCount: number }> {
+    await this.settingsService.set(
+      'checkin_enabled',
+      body.enabled ? 'true' : 'false',
+    );
+    const newQrCount = body.enabled
+      ? await this.amenitiesService.ensureQrTokens()
+      : 0;
+    return { enabled: body.enabled, newQrCount };
+  }
+
+  @Get('approval')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async getApprovalEnabled() {
+    const val = await this.settingsService.get('admin_approval_required');
+    return { enabled: val === 'true' };
+  }
+
+  @Put('approval')
+  @Roles(UserRole.ADMIN, UserRole.SUPER)
+  async updateApprovalEnabled(
+    @Body() body: { enabled: boolean },
+  ): Promise<{ enabled: boolean; autoApprovedCount: number }> {
+    await this.settingsService.set(
+      'admin_approval_required',
+      body.enabled ? 'true' : 'false',
+    );
+    let autoApprovedCount = 0;
+    if (!body.enabled) {
+      const pending = await this.usersService.findPendingApproval();
+      for (const user of pending) {
+        await this.usersService.setApproval(user.id, true);
+      }
+      autoApprovedCount = pending.length;
+    }
+    return { enabled: body.enabled, autoApprovedCount };
   }
 }

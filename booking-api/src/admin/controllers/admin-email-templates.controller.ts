@@ -18,11 +18,21 @@ const HTML_TEMPLATE_KEYS = new Set([
   'registration',
   'booking_confirmation',
   'booking_reminder',
+  'admin_approval_notification',
+  'user_approved',
+  'user_rejected',
+  'user_access_revoked',
+  'user_account_deleted',
+  'booking_deleted_by_admin',
+  'email_footer',
 ]);
 
-// {{cancelUrl}} is a template variable, not a real URL, so it fails the scheme check.
-// We swap it for a safe placeholder before sanitizing and restore it after.
-const CANCEL_PLACEHOLDER = 'https://cancel-token.placeholder.local';
+// Template variables used in href attributes are not real URLs and fail the scheme check.
+// We swap them for safe placeholders before sanitizing and restore them after.
+const URL_PLACEHOLDERS: Array<[string, string]> = [
+  ['href="{{cancelUrl}}"', 'https://cancel-token.placeholder.local'],
+  ['href="{{adminUrl}}"', 'https://admin-url.placeholder.local'],
+];
 
 const ALLOWED_HTML: sanitizeHtml.IOptions = {
   allowedTags: [
@@ -68,15 +78,16 @@ const ALLOWED_HTML: sanitizeHtml.IOptions = {
 };
 
 function sanitizeEmailHtml(raw: string): string {
-  const withPlaceholder = raw.replaceAll(
-    'href="{{cancelUrl}}"',
-    `href="${CANCEL_PLACEHOLDER}"`,
-  );
-  const sanitized = sanitizeHtml(withPlaceholder, ALLOWED_HTML);
-  return sanitized.replaceAll(
-    `href="${CANCEL_PLACEHOLDER}"`,
-    'href="{{cancelUrl}}"',
-  );
+  let processed = raw;
+  for (const [variable, placeholder] of URL_PLACEHOLDERS) {
+    processed = processed.replaceAll(variable, `href="${placeholder}"`);
+  }
+  const sanitized = sanitizeHtml(processed, ALLOWED_HTML);
+  let result = sanitized;
+  for (const [variable, placeholder] of URL_PLACEHOLDERS) {
+    result = result.replaceAll(`href="${placeholder}"`, variable);
+  }
+  return result;
 }
 
 @Controller('admin/email-templates')

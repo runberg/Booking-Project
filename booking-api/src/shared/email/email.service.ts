@@ -17,6 +17,11 @@ export class EmailService {
     private readonly settingsService: SettingsService,
   ) {}
 
+  invalidateTransporter(): void {
+    this.transporter = null;
+    this.transporterBuiltAt = 0;
+  }
+
   private async getTransporter(): Promise<nodemailer.Transporter> {
     const now = Date.now();
     if (
@@ -75,6 +80,15 @@ export class EmailService {
     return (await this.settingsService.get('smtp_from')) ?? '';
   }
 
+  private async buildHtml(content: string): Promise<string> {
+    const footerTpl = await this.templates.getByKey('email_footer');
+    const footerText = footerTpl?.body?.trim() ?? '';
+    const footer = footerText
+      ? `<hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px"><p style="font-size:12px;color:#999;text-align:center;font-style:italic">${footerText}</p>`
+      : '';
+    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${content}${footer}</div>`;
+  }
+
   async sendVerificationEmail(
     email: string,
     token: string,
@@ -91,7 +105,7 @@ export class EmailService {
       from: await this.getFromAddress(),
       to: email,
       subject: 'Verify Your Email Address',
-      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><p>${body.replaceAll('\n', '<br/>')}</p></div>`,
+      html: await this.buildHtml(body),
     };
     await (await this.getTransporter()).sendMail(mailOptions);
   }
@@ -102,34 +116,27 @@ export class EmailService {
     name: string,
   ): Promise<void> {
     const resetUrl = `${this.configService.get<string>('FRONTEND_URL', '')}/reset-password?token=${token}`;
-
+    const content = `
+      <h2 style="color: #333;">Password Reset Request</h2>
+      <p>Hi ${this.escapeHtml(name)},</p>
+      <p>We received a request to reset your password. Click the button below to create a new password:</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${resetUrl}"
+           style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+          Reset Password
+        </a>
+      </div>
+      <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+      <p>This link will expire in 1 hour.</p>
+      <p>If you didn't request a password reset, please ignore this email.</p>
+    `;
     const mailOptions = {
       from: await this.getFromAddress(),
       to: email,
       subject: 'Reset Your Password',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Password Reset Request</h2>
-          <p>Hi ${this.escapeHtml(name)},</p>
-          <p>We received a request to reset your password. Click the button below to create a new password:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetUrl}"
-               style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Reset Password
-            </a>
-          </div>
-          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-          <p style="word-break: break-all; color: #666;">${resetUrl}</p>
-          <p>This link will expire in 1 hour.</p>
-          <p>If you didn't request a password reset, please ignore this email.</p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-          <p style="color: #666; font-size: 12px;">
-            This is an automated email. Please do not reply to this message.
-          </p>
-        </div>
-      `,
+      html: await this.buildHtml(content),
     };
-
     await (await this.getTransporter()).sendMail(mailOptions);
   }
 
@@ -138,13 +145,26 @@ export class EmailService {
     subject: string,
     text: string,
   ): Promise<void> {
+    const content = `<p>${this.escapeHtml(text).replaceAll('\n', '<br/>')}</p>`;
     const mailOptions = {
       from: await this.getFromAddress(),
       to: email,
       subject,
-      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <p>${this.escapeHtml(text).replaceAll('\n', '<br/>')}</p>
-      </div>`,
+      html: await this.buildHtml(content),
+    };
+    await (await this.getTransporter()).sendMail(mailOptions);
+  }
+
+  async sendHtmlEmail(
+    email: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
+    const mailOptions = {
+      from: await this.getFromAddress(),
+      to: email,
+      subject,
+      html: await this.buildHtml(html),
     };
     await (await this.getTransporter()).sendMail(mailOptions);
   }
@@ -167,7 +187,7 @@ export class EmailService {
       from: await this.getFromAddress(),
       to: email,
       subject,
-      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${html}</div>`,
+      html: await this.buildHtml(html),
     };
     await (await this.getTransporter()).sendMail(mailOptions);
   }

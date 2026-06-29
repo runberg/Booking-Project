@@ -48,4 +48,26 @@ export class EmailTemplatesController {
         mismatch?.body || 'QR code does not match. Please try again.',
     };
   }
+
+  @Get('site-footer-text')
+  async getSiteFooterText() {
+    const template = await this.svc.getByKey('site_footer_text');
+    return { text: template?.body || '© {{year}} All rights reserved.' };
+  }
+
+  @Get('approval-content')
+  async getApprovalContent() {
+    const [pendingMessage, loggedInMessage] = await Promise.all([
+      this.svc.getByKey('pending_approval_message'),
+      this.svc.getByKey('pending_approval_logged_in'),
+    ]);
+    return {
+      pendingMessage:
+        pendingMessage?.body ||
+        'Your email has been verified. Your account is awaiting admin approval before you can make bookings.',
+      loggedInMessage:
+        loggedInMessage?.body ||
+        'Your account is pending admin approval. You will be notified by email once approved.',
+    };
+  }
 }

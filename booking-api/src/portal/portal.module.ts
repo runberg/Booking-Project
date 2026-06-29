@@ -8,6 +8,7 @@ import { BookingsModule } from '../shared/bookings/bookings.module';
 import { EmailModule } from '../shared/email/email.module';
 import { RestrictionsModule } from '../shared/restrictions/restrictions.module';
 import { EmailTemplatesModule } from '../shared/email-templates/email-templates.module';
+import { SettingsModule } from '../shared/settings/settings.module';
 import { BookingRestriction } from '../shared/restrictions/booking-restriction.entity';
 import { Booking } from '../shared/bookings/booking.entity';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -17,6 +18,7 @@ import { BuildingsController } from './controllers/buildings.controller';
 import { BookingsController } from './controllers/bookings.controller';
 import { BookingsPublicController } from './controllers/bookings-public.controller';
 import { EmailTemplatesController } from './controllers/email-templates.controller';
+import { ProfileController } from './controllers/profile.controller';
 
 @Module({
   imports: [
@@ -29,6 +31,7 @@ import { EmailTemplatesController } from './controllers/email-templates.controll
     EmailModule,
     RestrictionsModule,
     EmailTemplatesModule,
+    SettingsModule,
   ],
   providers: [RolesGuard, UserThrottlerGuard],
   controllers: [
@@ -37,6 +40,7 @@ import { EmailTemplatesController } from './controllers/email-templates.controll
     BookingsController,
     BookingsPublicController,
     EmailTemplatesController,
+    ProfileController,
   ],
 })
 export class PortalModule {}

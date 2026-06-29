@@ -10,6 +10,7 @@ import { Booking } from '../bookings/booking.entity';
 @Injectable()
 export class RemindersService implements OnModuleInit {
   private readonly logger = new Logger(RemindersService.name);
+  private sleep(ms: number) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
   constructor(
     private readonly bookingsService: BookingsService,
@@ -29,10 +30,15 @@ export class RemindersService implements OnModuleInit {
     setTimeout(() => {
       void this.runCheck();
       void this.runCheckinCheck();
+      this.runApprovalNotificationCheck().catch(() => {});
       setInterval(() => {
         void this.runCheck();
         void this.runCheckinCheck();
       }, intervalMs);
+      setInterval(
+        () => { this.runApprovalNotificationCheck().catch(() => {}); },
+        3_600_000, // every hour
+      );
     }, 20_000);
   }
 
@@ -60,6 +66,7 @@ export class RemindersService implements OnModuleInit {
           new Date(booking.createdAt).getTime() <= minCreatedAtMs
         ) {
           await this.sendReminder(booking, bookingDateTime);
+          await this.sleep(200);
         }
       }
     } catch (e: unknown) {
@@ -67,8 +74,39 @@ export class RemindersService implements OnModuleInit {
     }
   }
 
+  private async runApprovalNotificationCheck() {
+    try {
+      const approvalRequired = await this.settingsService.get('admin_approval_required');
+      if (approvalRequired !== 'true') return;
+
+      const pending = await this.usersService.findPendingApproval();
+      if (pending.length === 0) return;
+
+      const admins = await this.usersService.findAdminsAndSupers();
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL', '');
+      const adminUrl = `${frontendUrl}/admin`;
+
+      for (const admin of admins) {
+        await this.emailService.sendTemplateEmail(
+          admin.email,
+          'Users awaiting admin approval',
+          'admin_approval_notification',
+          { count: String(pending.length), adminUrl },
+        );
+      }
+      this.logger.log(
+        `Approval notification sent to ${admins.length} admin(s) for ${pending.length} pending user(s)`,
+      );
+    } catch (e: unknown) {
+      this.logger.error('Approval notification check failed', e);
+    }
+  }
+
   private async runCheckinCheck() {
     try {
+      const checkinEnabled = await this.settingsService.get('checkin_enabled');
+      if (checkinEnabled === 'false') return;
+
       const minutesRaw = await this.settingsService.get(
         'checkin_minutes_before',
       );

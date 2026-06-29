@@ -145,6 +145,15 @@ export const LoginPage: React.FC = () => {
             <Button type="submit" disabled={isLoading} className="w-full">
               {isLoading ? 'Signing in…' : 'Sign in'}
             </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm text-primary-600 hover:text-primary-700"
+                onClick={() => navigate('/forgot-password')}
+              >
+                Forgot password?
+              </button>
+            </div>
           </form>
 
           <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">

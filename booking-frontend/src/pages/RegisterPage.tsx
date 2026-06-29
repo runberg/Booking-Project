@@ -42,12 +42,7 @@ export const RegisterPage: React.FC = () => {
   const [isLoadingUnits, setIsLoadingUnits] = useState(false);
   const [legalText, setLegalText] = useState<string>('Legal note - Account creation');
 
-  // Shown when registration returns 409 (unit already registered)
-  const [showContactForm, setShowContactForm] = useState(false);
-  const [contactData, setContactData] = useState({ name: '', email: '', building: '', unit: '', message: '' });
-  const [isContactLoading, setIsContactLoading] = useState(false);
-  const [contactSent, setContactSent] = useState(false);
-  const [contactError, setContactError] = useState('');
+  const [unitAlreadyRegistered, setUnitAlreadyRegistered] = useState(false);
 
   const {
     register,
@@ -123,14 +118,7 @@ export const RegisterPage: React.FC = () => {
       });
     } catch (err: any) {
       if (err.statusCode === 409) {
-        setShowContactForm(true);
-        setContactData({
-          name: data.name,
-          email: data.email,
-          building: data.building,
-          unit: data.apartmentNumber,
-          message: '',
-        });
+        setUnitAlreadyRegistered(true);
       } else {
         setError(err.message || 'Registration failed');
       }
@@ -139,21 +127,7 @@ export const RegisterPage: React.FC = () => {
     }
   };
 
-  const handleContactSubmit = async () => {
-    if (!contactData.message.trim()) return;
-    setIsContactLoading(true);
-    setContactError('');
-    try {
-      await api.post('/auth/contact-admin', contactData);
-      setContactSent(true);
-    } catch (e: any) {
-      setContactError(e.response?.data?.message || 'Failed to send message. Please try again later.');
-    } finally {
-      setIsContactLoading(false);
-    }
-  };
-
-  if (showContactForm) {
+  if (unitAlreadyRegistered) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -163,51 +137,12 @@ export const RegisterPage: React.FC = () => {
         </div>
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
           <Card>
-            {contactSent ? (
-              <div>
-                <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
-                  <p className="text-sm text-green-700">
-                    Your message has been sent to the administrator. They will be in touch with you shortly.
-                  </p>
-                </div>
-                <Button variant="secondary" onClick={() => navigate('/login')} className="w-full">
-                  Back to login
-                </Button>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-gray-600 mb-4">
-                  The unit <strong>{contactData.building}, {contactData.unit}</strong> is already registered. If you believe this is an error or you need access, please send a message to the administrator below.
-                </p>
-                {contactError && (
-                  <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-                    <p className="text-sm text-red-600">{contactError}</p>
-                  </div>
-                )}
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="contact-message" className="block text-sm font-medium text-gray-700 mb-1">Your message</label>
-                    <textarea
-                      id="contact-message"
-                      className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[120px]"
-                      placeholder="Describe your situation..."
-                      value={contactData.message}
-                      onChange={(e) => setContactData((d) => ({ ...d, message: e.target.value }))}
-                    />
-                  </div>
-                  <Button
-                    onClick={handleContactSubmit}
-                    disabled={isContactLoading || !contactData.message.trim()}
-                    className="w-full"
-                  >
-                    {isContactLoading ? 'Sending...' : 'Send message to admin'}
-                  </Button>
-                  <Button variant="secondary" onClick={() => setShowContactForm(false)} className="w-full">
-                    Go back and try again
-                  </Button>
-                </div>
-              </div>
-            )}
+            <p className="text-sm text-gray-600 mb-6">
+              This building and apartment number is already registered. If you believe this is an error, please contact administration.
+            </p>
+            <Button variant="secondary" onClick={() => setUnitAlreadyRegistered(false)} className="w-full">
+              Go back and try again
+            </Button>
           </Card>
         </div>
       </div>

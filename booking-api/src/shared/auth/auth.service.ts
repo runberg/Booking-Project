@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../email/email.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   RegisterDto,
   LoginDto,
@@ -29,12 +30,18 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly settingsService: SettingsService,
     @InjectRepository(BookingLog)
     private readonly logsRepo: Repository<BookingLog>,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<{ message: string }> {
     const user = await this.usersService.create(registerDto);
+
+    const approvalRequired = await this.settingsService.get('admin_approval_required');
+    if (approvalRequired === 'true') {
+      await this.usersService.setApproval(user.id, false);
+    }
 
     const verificationToken = randomBytes(32).toString('hex');
     const expiresAt = new Date();
@@ -114,7 +121,7 @@ export class AuthService {
 
   async verifyEmail(
     verifyEmailDto: VerifyEmailDto,
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; pendingApproval?: boolean }> {
     const user = await this.usersService.findByEmailVerificationToken(
       verifyEmailDto.token,
     );
@@ -123,6 +130,13 @@ export class AuthService {
     }
 
     await this.usersService.updateEmailVerification(user.id, true);
+
+    if (!user.isApproved) {
+      return {
+        message: 'Email verified. Your account is awaiting admin approval.',
+        pendingApproval: true,
+      };
+    }
 
     return { message: 'Email verified successfully. You can now log in.' };
   }
@@ -245,6 +259,7 @@ export class AuthService {
       passwordResetExpires: user.passwordResetExpires,
       role: user.role,
       isActive: user.isActive,
+      isApproved: user.isApproved,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

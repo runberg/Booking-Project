@@ -15,6 +15,7 @@ import {
 import { AdminService } from './admin.service';
 import { UsersService } from '../shared/users/users.service';
 import { EmailService } from '../shared/email/email.service';
+import { BookingsService } from '../shared/bookings/bookings.service';
 import { JwtAuthGuard } from '../shared/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../shared/decorators/roles.decorator';
@@ -29,7 +30,30 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly usersService: UsersService,
     private readonly emailService: EmailService,
+    private readonly bookingsService: BookingsService,
   ) {}
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private interpolateUser(template: string, name: string, email: string): string {
+    return template
+      .replaceAll('{{name}}', name || email)
+      .replaceAll('{{email}}', email);
+  }
+
+  private interpolateBooking(
+    template: string,
+    booking: { userName: string; userEmail: string; amenityName: string; date: string; startTime: string },
+  ): string {
+    return template
+      .replaceAll('{{name}}', booking.userName || booking.userEmail)
+      .replaceAll('{{email}}', booking.userEmail)
+      .replaceAll('{{amenity}}', booking.amenityName)
+      .replaceAll('{{date}}', booking.date)
+      .replaceAll('{{time}}', booking.startTime);
+  }
 
   @Get('users')
   async getAllUsers() {
@@ -41,6 +65,7 @@ export class AdminController {
       building: user.building,
       apartmentNumber: user.apartmentNumber,
       isEmailVerified: user.isEmailVerified,
+      isApproved: user.isApproved,
       role: user.role,
       isActive: user.isActive,
       createdAt: user.createdAt,
@@ -92,6 +117,117 @@ export class AdminController {
     }
     await this.usersService.updateUserRole(id, body.role);
     return { message: 'User role updated' };
+  }
+
+  @Post('users/:id/approve')
+  async approveUser(@Param('id') id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    await this.usersService.setApproval(id, true);
+    await this.emailService.sendTemplateEmail(
+      user.email,
+      'Your account has been approved',
+      'user_approved',
+      { name: user.name },
+    );
+    return { message: 'User approved' };
+  }
+
+  @Post('users/:id/reject')
+  async rejectUser(@Param('id') id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    await this.emailService.sendTemplateEmail(
+      user.email,
+      'Account application not approved',
+      'user_rejected',
+      { name: user.name },
+    );
+    await this.bookingsService.deleteAllForUser(id);
+    await this.usersService.deleteUser(id);
+    return { message: 'User rejected and removed' };
+  }
+
+  @Post('users/:id/revoke')
+  async revokeUser(
+    @Param('id') id: string,
+    @Body() body: { subject: string; emailBody: string },
+    @Request() req: RequestWithUser,
+  ) {
+    if (req.user.id === id) {
+      throw new ForbiddenException('Cannot revoke your own access');
+    }
+    const user = await this.usersService.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    await this.usersService.setApproval(id, false);
+    const subject = this.interpolateUser(body.subject, user.name, user.email);
+    const html = this.interpolateUser(body.emailBody, user.name, user.email);
+    await this.emailService.sendHtmlEmail(user.email, subject, html);
+    return { message: 'User access revoked' };
+  }
+
+  @Post('users/:id/delete-account')
+  async adminDeleteUserWithEmail(
+    @Param('id') id: string,
+    @Body() body: { subject: string; emailBody: string },
+    @Request() req: RequestWithUser,
+  ) {
+    if (req.user.id === id) {
+      throw new ForbiddenException('Cannot delete your own account');
+    }
+    const user = await this.usersService.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    const subject = this.interpolateUser(body.subject, user.name, user.email);
+    const html = this.interpolateUser(body.emailBody, user.name, user.email);
+    await this.emailService.sendHtmlEmail(user.email, subject, html);
+    await this.bookingsService.deleteAllForUser(id);
+    await this.usersService.deleteUser(id);
+    return { message: 'User account deleted' };
+  }
+
+  @Get('bookings')
+  async getAllBookings() {
+    return this.bookingsService.findAllUpcomingForAdmin();
+  }
+
+  @Post('bookings/delete-bulk')
+  async bulkDeleteBookings(
+    @Body() body: { bookingIds: string[]; subject: string; emailBody: string },
+  ) {
+    if (!Array.isArray(body.bookingIds) || body.bookingIds.length === 0) {
+      throw new BadRequestException('bookingIds must be a non-empty array');
+    }
+    const bookings = await this.bookingsService.findByIdsWithDetails(body.bookingIds);
+    for (const booking of bookings) {
+      const subject = this.interpolateBooking(body.subject, booking);
+      const html = this.interpolateBooking(body.emailBody, booking);
+      await this.emailService.sendHtmlEmail(booking.userEmail, subject, html);
+      await this.bookingsService.deleteByIdForAdmin(booking.id);
+      await this.sleep(200);
+    }
+    return { deleted: bookings.length };
+  }
+
+  @Post('users/approve-bulk')
+  async bulkApproveUsers(@Body() body: { userIds: string[] }) {
+    if (!Array.isArray(body.userIds) || body.userIds.length === 0) {
+      throw new BadRequestException('userIds must be a non-empty array');
+    }
+    let approved = 0;
+    for (const id of body.userIds) {
+      const user = await this.usersService.findById(id);
+      if (!user || user.isApproved) continue;
+      await this.usersService.setApproval(id, true);
+      await this.emailService.sendTemplateEmail(
+        user.email,
+        'Your account has been approved',
+        'user_approved',
+        { name: user.name },
+      );
+      approved++;
+      await this.sleep(200);
+    }
+    return { message: `${approved} user(s) approved`, count: approved };
   }
 
   @Post('users')

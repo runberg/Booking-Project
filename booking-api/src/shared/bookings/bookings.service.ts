@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, SelectQueryBuilder, IsNull } from 'typeorm';
+import { Repository, Between, SelectQueryBuilder, IsNull, In } from 'typeorm';
 import { Booking } from './booking.entity';
 import { BookingCancelToken } from './booking-cancel-token.entity';
 import { BookingCheckinToken } from './booking-checkin-token.entity';
@@ -657,6 +657,97 @@ export class BookingsService implements OnModuleInit {
       );
     }
     return lines.join('\n');
+  }
+
+  async findAllUpcomingForAdmin() {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const nowKey = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const items = await this.bookingsRepo
+      .createQueryBuilder('b')
+      .where(
+        '(b.date > :today OR (b.date = :today AND b.startTime >= :startTime))',
+        { today: todayKey, startTime: nowKey },
+      )
+      .orderBy('b.date', 'ASC')
+      .addOrderBy('b.startTime', 'ASC')
+      .getMany();
+
+    return this.enrichBookings(items);
+  }
+
+  async findByIdsWithDetails(ids: string[]) {
+    if (ids.length === 0) return [];
+    const items = await this.bookingsRepo.findBy({ id: In(ids) });
+    return this.enrichBookings(items);
+  }
+
+  async deleteByIdForAdmin(id: string): Promise<void> {
+    const booking = await this.bookingsRepo.findOne({ where: { id } });
+    if (!booking) return;
+    await this.cancelTokenRepo
+      .createQueryBuilder()
+      .delete()
+      .where('bookingId = :id', { id })
+      .execute();
+    await this.checkinTokenRepo
+      .createQueryBuilder()
+      .delete()
+      .where('bookingId = :id', { id })
+      .execute();
+    await this.bookingsRepo.delete(id);
+    await this.writeLog('delete', booking);
+  }
+
+  private async enrichBookings(items: Booking[]) {
+    if (items.length === 0) return [];
+    const [allAmenities, users] = await Promise.all([
+      this.amenitiesService.listAll(),
+      this.usersService.findByIds([...new Set(items.map((b) => b.userId))]),
+    ]);
+    const amenityById = new Map(allAmenities.map((a) => [a.id, a]));
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    return items.map((b) => {
+      const user = userById.get(b.userId);
+      const amenity = amenityById.get(b.amenityId);
+      return {
+        id: b.id,
+        amenityId: b.amenityId,
+        amenityName: amenity?.name ?? 'Unknown amenity',
+        date: b.date,
+        startTime: b.startTime,
+        slotLength: b.slotLength,
+        userId: b.userId,
+        userName: user?.name ?? 'Unknown user',
+        userEmail: user?.email ?? '',
+        userBuilding: user?.building ?? '',
+        userApartmentNumber: user?.apartmentNumber ?? '',
+      };
+    });
+  }
+
+  async deleteAllForUser(userId: string): Promise<void> {
+    const bookings = await this.bookingsRepo.find({
+      where: { userId },
+      select: ['id'],
+    });
+    if (bookings.length > 0) {
+      const ids = bookings.map((b) => b.id);
+      await this.cancelTokenRepo
+        .createQueryBuilder()
+        .delete()
+        .where('bookingId IN (:...ids)', { ids })
+        .execute();
+      await this.checkinTokenRepo
+        .createQueryBuilder()
+        .delete()
+        .where('bookingId IN (:...ids)', { ids })
+        .execute();
+      await this.bookingsRepo.delete({ userId });
+    }
   }
 
   private async pruneOldLogs(days: number) {

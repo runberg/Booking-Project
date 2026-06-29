@@ -150,9 +150,9 @@ export const authService = {
     }
   },
 
-  async verifyEmail(token: string): Promise<ApiResponse> {
+  async verifyEmail(token: string): Promise<ApiResponse & { pendingApproval?: boolean }> {
     try {
-      const response = await api.post<ApiResponse>('/auth/verify-email', { token });
+      const response = await api.post<ApiResponse & { pendingApproval?: boolean }>('/auth/verify-email', { token });
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Email verification failed');

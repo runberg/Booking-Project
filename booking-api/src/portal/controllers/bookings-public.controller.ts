@@ -8,13 +8,17 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { BookingsService } from '../../shared/bookings/bookings.service';
+import { SettingsService } from '../../shared/settings/settings.service';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const HEX32 = /^[0-9a-f]{32}$/;
 
 @Controller('bookings')
 export class BookingsPublicController {
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(
+    private readonly bookingsService: BookingsService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   @Get('cancel-preview/:token')
   async cancelPreview(@Param('token') token: string) {
@@ -53,6 +57,14 @@ export class BookingsPublicController {
       throw new BadRequestException('Invalid token.');
     if (!body?.qrToken || !HEX32.test(body.qrToken))
       throw new BadRequestException('Invalid QR code.');
+
+    const checkinEnabled = await this.settingsService.get('checkin_enabled');
+    if (checkinEnabled === 'false') {
+      throw new BadRequestException(
+        'Check-in is currently disabled. Please contact the administrator.',
+      );
+    }
+
     const result = await this.bookingsService.checkinByToken(
       body.token,
       body.qrToken,

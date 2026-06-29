@@ -21,7 +21,7 @@ type PageContent = {
   mismatchText: string;
 };
 
-type Stage = 'loading' | 'ready' | 'scanning' | 'success' | 'mismatch' | 'error';
+type Stage = 'loading' | 'ready' | 'scanning' | 'success' | 'mismatch' | 'disabled' | 'error';
 
 const SCANNER_ID = 'qr-checkin-scanner';
 const noop = () => {};
@@ -114,7 +114,9 @@ export const CheckinPage: React.FC = () => {
         setStage('success');
       } else {
         const d = await res.json().catch(() => ({}));
-        if (d.message?.toLowerCase().includes('match')) {
+        if (d.message?.toLowerCase().includes('disabled')) {
+          setStage('disabled');
+        } else if (d.message?.toLowerCase().includes('match')) {
           setStage('mismatch');
         } else {
           setErrorMsg(d.message || 'Check-in failed.');
@@ -192,6 +194,19 @@ export const CheckinPage: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-2">Wrong QR code</h2>
               <p className="text-sm text-gray-600 mb-6">{content.mismatchText}</p>
               <Button onClick={() => setStage('ready')} className="w-full">Try again</Button>
+            </div>
+          )}
+
+          {stage === 'disabled' && (
+            <div className="text-center py-4">
+              <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">Check-in is disabled</h2>
+              <p className="text-sm text-gray-600 mb-6">The check-in feature is currently disabled. Please contact the building administrator for assistance.</p>
+              <Button onClick={() => navigate('/login')} className="w-full">Back to login</Button>
             </div>
           )}
 

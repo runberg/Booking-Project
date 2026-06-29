@@ -7,10 +7,14 @@ import { BookingPage } from './pages/BookingPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { SecurityPage } from './pages/SecurityPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 const CancelBookingPage = React.lazy(() => import('./pages/CancelBookingPage').then(m => ({ default: m.CancelBookingPage })));
 const CheckinPage = React.lazy(() => import('./pages/CheckinPage').then(m => ({ default: m.CheckinPage })));
 import { authService, API_BASE_URL } from './services/authService';
 import { setServerTimezone } from './utils/date';
+import { SiteFooter } from './components/SiteFooter';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = authService.isAuthenticated();
@@ -96,6 +100,26 @@ function App() {
             }
           />
           <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={<ResetPasswordPage />}
+          />
+          <Route
             path="/verify-email"
             element={<VerifyEmailPage />}
           />
@@ -109,6 +133,7 @@ function App() {
           />
         </Routes>
         </React.Suspense>
+        <SiteFooter />
       </div>
     </Router>
   );

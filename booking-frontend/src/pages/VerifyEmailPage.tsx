@@ -3,114 +3,155 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Mail, CheckCircle, XCircle } from 'lucide-react';
-import { authService } from '../services/authService';
+import { authService, api } from '../services/authService';
 
-export const VerifyEmailPage: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
-  const [error, setError] = useState('');
-  
-  const message = location.state?.message || 'Registration successful! Please check your email to verify your account.';
-  const token = new URLSearchParams(location.search).get('token');
+type PageState = 'idle' | 'verifying' | 'pending' | 'verified' | 'error';
 
-  useEffect(() => {
-    if (token) {
-      verifyEmail();
-    }
-  }, [token]);
-
-  const verifyEmail = async () => {
-    setIsVerifying(true);
-    setError('');
-    
-    try {
-      await authService.verifyEmail(token!);
-      setIsVerified(true);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsVerifying(false);
-    }
+function getStatusDisplay(state: PageState): { icon: React.ReactNode; heading: string; sub: string } {
+  if (state === 'pending') {
+    return {
+      icon: <Mail className="mx-auto h-16 w-16 text-amber-500" />,
+      heading: 'Awaiting Approval',
+      sub: 'Your email has been verified.',
+    };
+  }
+  if (state === 'verified') {
+    return {
+      icon: <CheckCircle className="mx-auto h-16 w-16 text-green-500" />,
+      heading: 'Email Verified!',
+      sub: 'Your email has been successfully verified.',
+    };
+  }
+  if (state === 'error') {
+    return {
+      icon: <XCircle className="mx-auto h-16 w-16 text-red-500" />,
+      heading: 'Verification Failed',
+      sub: 'There was an issue verifying your email.',
+    };
+  }
+  return {
+    icon: <Mail className="mx-auto h-16 w-16 text-primary-500" />,
+    heading: 'Check your email',
+    sub: "We've sent you a verification link",
   };
+}
 
-  let statusIcon: React.ReactNode;
-  if (isVerified) statusIcon = <CheckCircle className="mx-auto h-16 w-16 text-green-500" />;
-  else if (error) statusIcon = <XCircle className="mx-auto h-16 w-16 text-red-500" />;
-  else statusIcon = <Mail className="mx-auto h-16 w-16 text-primary-500" />;
-
-  let statusHeading: string;
-  if (isVerified) statusHeading = 'Email Verified!';
-  else if (error) statusHeading = 'Verification Failed';
-  else statusHeading = 'Check your email';
-
-  let statusSub: string;
-  if (isVerified) statusSub = 'Your email has been successfully verified.';
-  else if (error) statusSub = 'There was an issue verifying your email.';
-  else statusSub = "We've sent you a verification link";
-
-  let cardContent: React.ReactNode;
-  if (isVerifying) {
-    cardContent = (
+const CardContent: React.FC<{
+  state: PageState;
+  idleMessage: string;
+  pendingMessage: string;
+  error: string;
+  onNavigate: (path: string) => void;
+}> = ({ state, idleMessage, pendingMessage, error, onNavigate }) => {
+  if (state === 'verifying') {
+    return (
       <div className="space-y-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
         <p className="text-sm text-gray-600">Verifying your email...</p>
       </div>
     );
-  } else if (isVerified) {
-    cardContent = (
+  }
+  if (state === 'pending') {
+    return (
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">
-          Your account is now verified and ready to use!
-        </p>
-        <Button onClick={() => navigate('/login')} className="w-full">
-          Sign in
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 text-left">
+          {pendingMessage || 'Your account is awaiting admin approval. You will be notified by email once approved.'}
+        </div>
+        <Button variant="secondary" onClick={() => onNavigate('/login')} className="w-full">
+          Back to sign in
         </Button>
       </div>
     );
-  } else if (error) {
-    cardContent = (
+  }
+  if (state === 'verified') {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">Your account is now verified and ready to use!</p>
+        <Button onClick={() => onNavigate('/login')} className="w-full">Sign in</Button>
+      </div>
+    );
+  }
+  if (state === 'error') {
+    return (
       <div className="space-y-4">
         <p className="text-sm text-red-600">{error}</p>
-        <Button variant="secondary" onClick={() => navigate('/login')} className="w-full">
-          Back to login
-        </Button>
-      </div>
-    );
-  } else {
-    cardContent = (
-      <div className="space-y-4">
-        <Mail className="mx-auto h-12 w-12 text-primary-500" />
-        <p className="text-sm text-gray-600">{message}</p>
-        <p className="text-sm text-gray-500">
-          Click the link in your email to complete your registration.
-        </p>
-        <Button variant="secondary" onClick={() => navigate('/login')} className="w-full">
+        <Button variant="secondary" onClick={() => onNavigate('/login')} className="w-full">
           Back to login
         </Button>
       </div>
     );
   }
+  return (
+    <div className="space-y-4">
+      <Mail className="mx-auto h-12 w-12 text-primary-500" />
+      <p className="text-sm text-gray-600">{idleMessage}</p>
+      <p className="text-sm text-gray-500">Click the link in your email to complete your registration.</p>
+      <Button variant="secondary" onClick={() => onNavigate('/login')} className="w-full">
+        Back to login
+      </Button>
+    </div>
+  );
+};
+
+export const VerifyEmailPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [pageState, setPageState] = useState<PageState>('idle');
+  const [pendingMessage, setPendingMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const idleMessage = location.state?.message || 'Registration successful! Please check your email to verify your account.';
+  const token = new URLSearchParams(location.search).get('token');
+
+  useEffect(() => {
+    if (token) {
+      doVerify();
+    }
+  }, [token]);
+
+  const doVerify = async () => {
+    setPageState('verifying');
+    try {
+      const result = await authService.verifyEmail(token!);
+      if (result.pendingApproval) {
+        setPageState('pending');
+        try {
+          const { data } = await api.get('/email-templates/approval-content');
+          setPendingMessage(data.pendingMessage || '');
+        } catch {
+          // use default text
+        }
+      } else {
+        setPageState('verified');
+      }
+    } catch (err: any) {
+      setError(err.message);
+      setPageState('error');
+    }
+  };
+
+  const { icon, heading, sub } = getStatusDisplay(pageState);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
-          {statusIcon}
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {statusHeading}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {statusSub}
-          </p>
+          {icon}
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">{heading}</h2>
+          <p className="mt-2 text-center text-sm text-gray-600">{sub}</p>
         </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <Card>
           <div className="text-center space-y-6">
-            {cardContent}
+            <CardContent
+              state={pageState}
+              idleMessage={idleMessage}
+              pendingMessage={pendingMessage}
+              error={error}
+              onNavigate={navigate}
+            />
           </div>
         </Card>
       </div>

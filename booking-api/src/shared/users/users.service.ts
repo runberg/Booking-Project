@@ -126,12 +126,32 @@ export class UsersService {
     await this.usersRepository.update(userId, { role });
   }
 
+  async updateName(userId: string, name: string): Promise<void> {
+    await this.usersRepository.update(userId, { name });
+  }
+
   async findAll(): Promise<User[]> {
     return this.usersRepository.find();
   }
 
   async deleteUser(userId: string): Promise<void> {
     await this.usersRepository.delete(userId);
+  }
+
+  async setApproval(userId: string, approved: boolean): Promise<void> {
+    await this.usersRepository.update(userId, { isApproved: approved });
+  }
+
+  async findPendingApproval(): Promise<User[]> {
+    return this.usersRepository.find({
+      where: { isApproved: false, isEmailVerified: true },
+    });
+  }
+
+  async findAdminsAndSupers(): Promise<User[]> {
+    return this.usersRepository.find({
+      where: [{ role: UserRole.ADMIN }, { role: UserRole.SUPER }],
+    });
   }
 
   private async hashPassword(password: string): Promise<string> {

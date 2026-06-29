@@ -19,6 +19,7 @@ interface User {
   building: string;
   apartmentNumber: string;
   isEmailVerified: boolean;
+  isApproved: boolean;
   role: 'user' | 'admin' | 'super' | 'security';
   isActive: boolean;
   createdAt: string;
@@ -29,6 +30,20 @@ interface Building {
   name: string;
   isActive: boolean;
   createdAt: string;
+}
+
+interface AdminBooking {
+  id: string;
+  amenityId: string;
+  amenityName: string;
+  date: string;
+  startTime: string;
+  slotLength: number;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userBuilding: string;
+  userApartmentNumber: string;
 }
 
 interface SmtpSettings {
@@ -94,16 +109,15 @@ export const AdminDashboard: React.FC = () => {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{
-    isOpen: boolean;
-    userId: string | null;
+  const [emailActionModal, setEmailActionModal] = useState<{
+    mode: 'revoke' | 'delete';
+    userId: string;
     userName: string;
-  }>({
-    isOpen: false,
-    userId: null,
-    userName: '',
-  });
-  const [activeTab, setActiveTab] = useState<'users' | 'buildings' | 'amenities' | 'logs' | 'emails' | 'settings'>('users');
+    subject: string;
+    body: string;
+    isSubmitting: boolean;
+  } | null>(null);
+  const [activeTab, setActiveTab] = useState<'users' | 'bookings' | 'buildings' | 'amenities' | 'logs' | 'emails' | 'smtp' | 'settings'>('users');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Buildings state
@@ -120,6 +134,37 @@ export const AdminDashboard: React.FC = () => {
   const [unitInputs, setUnitInputs] = useState<Record<string, string>>({});
   const [isSavingUnits, setIsSavingUnits] = useState<Record<string, boolean>>({});
   const [isLoadingUnits, setIsLoadingUnits] = useState<Record<string, boolean>>({});
+
+  // Check-in feature state
+  const [checkinEnabled, setCheckinEnabled] = useState<boolean | null>(null);
+  const [isLoadingCheckin, setIsLoadingCheckin] = useState(false);
+  const [isTogglingCheckin, setIsTogglingCheckin] = useState(false);
+  const [checkinNewQrCount, setCheckinNewQrCount] = useState<number | null>(null);
+
+  // Admin approval feature state
+  const [approvalEnabled, setApprovalEnabled] = useState<boolean | null>(null);
+  const [isTogglingApproval, setIsTogglingApproval] = useState(false);
+  const [approvalAutoApprovedCount, setApprovalAutoApprovedCount] = useState<number | null>(null);
+
+  // Bookings tab state
+  const [adminBookings, setAdminBookings] = useState<AdminBooking[]>([]);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false);
+  const [bookingsQuery, setBookingsQuery] = useState('');
+  const [bookingsDateFilter, setBookingsDateFilter] = useState('');
+  const [bookingsAmenityFilter, setBookingsAmenityFilter] = useState('');
+  const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
+  const [bookingDeleteModal, setBookingDeleteModal] = useState<{
+    subject: string;
+    body: string;
+    isSubmitting: boolean;
+  } | null>(null);
+
+  // Users tab: pending approval filter, selection, and per-row actions
+  const [pendingApprovalFilter, setPendingApprovalFilter] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [approvingUserId, setApprovingUserId] = useState<string | null>(null);
+  const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
 
   // SMTP settings state
   const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>({
@@ -259,12 +304,150 @@ export const AdminDashboard: React.FC = () => {
     } catch {}
   };
 
+  const fetchCheckinEnabled = async () => {
+    setIsLoadingCheckin(true);
+    try {
+      const { data } = await api.get('/admin/settings/checkin');
+      setCheckinEnabled(data.enabled);
+    } catch {
+      setCheckinEnabled(null);
+    } finally {
+      setIsLoadingCheckin(false);
+    }
+  };
+
+  const toggleCheckin = async (enable: boolean) => {
+    setIsTogglingCheckin(true);
+    setCheckinNewQrCount(null);
+    try {
+      const { data } = await api.put('/admin/settings/checkin', { enabled: enable });
+      setCheckinEnabled(data.enabled);
+      setCheckinNewQrCount(data.newQrCount);
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to update check-in setting' });
+    } finally {
+      setIsTogglingCheckin(false);
+    }
+  };
+
+  const fetchApprovalEnabled = async () => {
+    try {
+      const { data } = await api.get('/admin/settings/approval');
+      setApprovalEnabled(data.enabled);
+    } catch {
+      setApprovalEnabled(null);
+    }
+  };
+
+  const toggleApproval = async (enable: boolean) => {
+    setIsTogglingApproval(true);
+    setApprovalAutoApprovedCount(null);
+    try {
+      const { data } = await api.put('/admin/settings/approval', { enabled: enable });
+      setApprovalEnabled(data.enabled);
+      setApprovalAutoApprovedCount(data.autoApprovedCount ?? 0);
+      if (!enable) fetchUsers();
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to update approval setting' });
+    } finally {
+      setIsTogglingApproval(false);
+    }
+  };
+
+  const approveUser = async (userId: string) => {
+    setApprovingUserId(userId);
+    try {
+      await api.post(`/admin/users/${userId}/approve`);
+      setNotification({ type: 'success', message: 'User approved' });
+      fetchUsers();
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to approve user' });
+    } finally {
+      setApprovingUserId(null);
+    }
+  };
+
+  const rejectUser = async (userId: string) => {
+    setRejectingUserId(userId);
+    try {
+      await api.post(`/admin/users/${userId}/reject`);
+      setNotification({ type: 'success', message: 'User rejected and removed' });
+      fetchUsers();
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to reject user' });
+    } finally {
+      setRejectingUserId(null);
+    }
+  };
+
+  const bulkApproveSelected = async () => {
+    if (selectedUserIds.size === 0) return;
+    setIsBulkApproving(true);
+    try {
+      const { data } = await api.post('/admin/users/approve-bulk', { userIds: Array.from(selectedUserIds) });
+      setNotification({ type: 'success', message: `${data.count} user(s) approved` });
+      setSelectedUserIds(new Set());
+      fetchUsers();
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to bulk approve users' });
+    } finally {
+      setIsBulkApproving(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'buildings') fetchBuildings();
+    if (activeTab === 'bookings') fetchBookings();
     if (activeTab === 'logs') fetchLogs();
     if (activeTab === 'emails') fetchEmailTemplates();
-    if (activeTab === 'settings' && isAdmin) fetchSmtpSettings();
+    if (activeTab === 'smtp' && isAdmin) fetchSmtpSettings();
+    if (activeTab === 'settings') {
+      fetchCheckinEnabled();
+      fetchApprovalEnabled();
+    }
   }, [activeTab]);
+
+  const fetchBookings = async () => {
+    setIsLoadingBookings(true);
+    try {
+      const { data } = await api.get('/admin/bookings');
+      setAdminBookings(data);
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.response?.data?.message || 'Failed to load bookings' });
+    } finally {
+      setIsLoadingBookings(false);
+    }
+  };
+
+  const openBookingDeleteModal = async (ids: Set<string>) => {
+    try {
+      const { data } = await api.get('/admin/email-templates');
+      const tpl = data.find((t: any) => t.key === 'booking_deleted_by_admin');
+      setSelectedBookingIds(ids);
+      setBookingDeleteModal({ subject: tpl?.subject || '', body: tpl?.body || '', isSubmitting: false });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.response?.data?.message || 'Failed to load email template' });
+    }
+  };
+
+  const confirmBookingDelete = async () => {
+    if (!bookingDeleteModal) return;
+    setBookingDeleteModal((prev) => prev ? { ...prev, isSubmitting: true } : null);
+    try {
+      const { data } = await api.post('/admin/bookings/delete-bulk', {
+        bookingIds: Array.from(selectedBookingIds),
+        subject: bookingDeleteModal.subject,
+        emailBody: bookingDeleteModal.body,
+      });
+      setNotification({ type: 'success', message: `${data.deleted} booking(s) deleted` });
+      setBookingDeleteModal(null);
+      setSelectedBookingIds(new Set());
+      fetchBookings();
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.response?.data?.message || 'Failed to delete bookings' });
+      setBookingDeleteModal((prev) => prev ? { ...prev, isSubmitting: false } : null);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -280,32 +463,40 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const deleteUser = async (userId: string) => {
+  const openEmailActionModal = async (user: User, mode: 'revoke' | 'delete') => {
+    const templateKey = mode === 'revoke' ? 'user_access_revoked' : 'user_account_deleted';
     try {
-      await api.delete(`/admin/users/${userId}`);
-      setNotification({ type: 'success', message: 'User deleted successfully' });
+      const { data } = await api.get('/admin/email-templates');
+      const tpl = data.find((t: any) => t.key === templateKey);
+      setEmailActionModal({
+        mode,
+        userId: user.id,
+        userName: user.name,
+        subject: tpl?.subject || '',
+        body: tpl?.body || '',
+        isSubmitting: false,
+      });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.response?.data?.message || 'Failed to load email template' });
+    }
+  };
+
+  const confirmEmailAction = async () => {
+    if (!emailActionModal) return;
+    setEmailActionModal((prev) => prev ? { ...prev, isSubmitting: true } : null);
+    const endpoint = emailActionModal.mode === 'revoke'
+      ? `/admin/users/${emailActionModal.userId}/revoke`
+      : `/admin/users/${emailActionModal.userId}/delete-account`;
+    try {
+      await api.post(endpoint, { subject: emailActionModal.subject, emailBody: emailActionModal.body });
+      const msg = emailActionModal.mode === 'revoke' ? 'User access revoked' : 'User account deleted';
+      setNotification({ type: 'success', message: msg });
+      setEmailActionModal(null);
       fetchUsers();
     } catch (err: any) {
-      setNotification({
-        type: 'error',
-        message: err.response?.data?.message || err.message || 'Failed to delete user',
-      });
+      setNotification({ type: 'error', message: err.response?.data?.message || err.message || 'Action failed' });
+      setEmailActionModal((prev) => prev ? { ...prev, isSubmitting: false } : null);
     }
-  };
-
-  const handleDeleteClick = (userId: string, userName: string) => {
-    setDeleteConfirmation({ isOpen: true, userId, userName });
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (deleteConfirmation.userId) {
-      await deleteUser(deleteConfirmation.userId);
-      setDeleteConfirmation({ isOpen: false, userId: null, userName: '' });
-    }
-  };
-
-  const handleDeleteCancel = () => {
-    setDeleteConfirmation({ isOpen: false, userId: null, userName: '' });
   };
 
   const resendVerificationEmail = async (userId: string) => {
@@ -492,11 +683,13 @@ export const AdminDashboard: React.FC = () => {
 
   const tabs: Array<{ key: typeof activeTab; label: string }> = [
     { key: 'users', label: 'Users' },
+    { key: 'bookings', label: 'Bookings' },
     { key: 'buildings', label: 'Buildings and Units' },
     { key: 'logs', label: 'Logs' },
     { key: 'amenities', label: 'Amenities' },
     { key: 'emails', label: 'Content' },
-    ...(isAdmin ? [{ key: 'settings' as typeof activeTab, label: 'Settings' }] : []),
+    ...(isAdmin || isSuper ? [{ key: 'settings' as typeof activeTab, label: 'Settings' }] : []),
+    ...(isAdmin ? [{ key: 'smtp' as typeof activeTab, label: 'SMTP' }] : []),
   ];
 
   const changeUserRole = async (userId: string, targetRole: string, successMsg: string) => {
@@ -716,6 +909,24 @@ export const AdminDashboard: React.FC = () => {
                 description: 'Shown when the scanned QR code does not match the booked amenity.',
                 defaultBody: 'The QR code does not match your booked amenity. Please make sure you are at the correct location.',
               },
+              {
+                key: 'pending_approval_message',
+                title: 'Pending approval — email verification success message',
+                description: 'Shown on the email verification page when admin approval is required. Informs the user their account is awaiting approval.',
+                defaultBody: 'Your email has been verified. Your account is now awaiting admin approval before you can make bookings. This can take up to 24 hours.',
+              },
+              {
+                key: 'pending_approval_logged_in',
+                title: 'Pending approval — logged-in message',
+                description: 'Shown on the bookings page when the user is logged in but still awaiting admin approval.',
+                defaultBody: 'Your account is pending admin approval. You will be notified by email once your account has been approved and you can start making bookings.',
+              },
+              {
+                key: 'site_footer_text',
+                title: 'Site footer',
+                description: 'Shown at the bottom of every page. Use {{year}} to insert the current year automatically.',
+                defaultBody: '© {{year}} All rights reserved.',
+              },
             ].map(({ key, title, description, defaultBody }) => (
               <div key={key}>
                 <h4 className="text-sm font-medium text-gray-700 mb-1">{title}</h4>
@@ -781,7 +992,68 @@ export const AdminDashboard: React.FC = () => {
               { tag: '{{checkinUrl}}', desc: 'Link to open the QR check-in page' },
             ],
           },
-        ].map(({ key, title, description, variables }) => {
+          {
+            key: 'email_footer',
+            title: 'Email footer (all emails)',
+            description: 'Appended to the bottom of every outgoing email. Use this for automated-email disclaimers and contact information.',
+            variables: [],
+            noSubject: true,
+          },
+          {
+            key: 'booking_deleted_by_admin',
+            title: 'Booking deleted by admin',
+            description: 'Sent to a user when an admin deletes one of their bookings.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{amenity}}', desc: 'Name of the amenity' },
+              { tag: '{{date}}', desc: 'Booking date (yyyy-mm-dd)' },
+              { tag: '{{time}}', desc: 'Booking start time' },
+            ],
+          },
+          {
+            key: 'admin_approval_notification',
+            title: 'Admin — approval pending notification',
+            description: 'Sent to all admins and super users once per hour when users are awaiting approval.',
+            variables: [
+              { tag: '{{count}}', desc: 'Number of users pending approval' },
+              { tag: '{{adminUrl}}', desc: 'Link to the admin panel' },
+            ],
+          },
+          {
+            key: 'user_approved',
+            title: 'User approved',
+            description: 'Sent to a user when their account application is approved by an admin.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+            ],
+          },
+          {
+            key: 'user_rejected',
+            title: 'User rejected',
+            description: 'Sent to a user when their account application is rejected by an admin.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+            ],
+          },
+          {
+            key: 'user_access_revoked',
+            title: 'User access revoked',
+            description: 'Sent to a user when an admin revokes their booking access (pushes account back to pending approval).',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{email}}', desc: 'Email address of the user' },
+            ],
+          },
+          {
+            key: 'user_account_deleted',
+            title: 'User account deleted',
+            description: 'Sent to a user when an admin permanently deletes their account.',
+            variables: [
+              { tag: '{{name}}', desc: 'Full name of the user' },
+              { tag: '{{email}}', desc: 'Email address of the user' },
+            ],
+          },
+        ].map(({ key, title, description, variables, noSubject }) => {
           const tpl = emailTemplates.find((x) => x.key === key);
           const subject = tpl?.subject ?? '';
 
@@ -812,7 +1084,7 @@ export const AdminDashboard: React.FC = () => {
                 />
               )}
 
-              <div className="mb-4">
+              {!noSubject && <div className="mb-4">
                 <label htmlFor={`subject-${key}`} className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
                 <input
                   id={`subject-${key}`}
@@ -823,7 +1095,7 @@ export const AdminDashboard: React.FC = () => {
                   onChange={(e) => handleSubjectChange(key, e.target.value)}
                 />
                 <p className="mt-1 text-xs text-gray-400">Variables like {'{{amenity}}'} are also supported in the subject.</p>
-              </div>
+              </div>}
 
               <RichEmailEditor
                 initialValue={tpl?.body ?? ''}
@@ -861,16 +1133,111 @@ export const AdminDashboard: React.FC = () => {
         />
       )}
 
-      <ConfirmationDialog
-        isOpen={deleteConfirmation.isOpen}
-        title="Delete User"
-        message={`Are you sure you want to delete "${deleteConfirmation.userName}"? This action cannot be undone.`}
-        confirmText="Delete User"
-        cancelText="Cancel"
-        onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
-        type="danger"
-      />
+      {emailActionModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setEmailActionModal(null)} />
+            <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {emailActionModal.mode === 'revoke' ? 'Revoke booking access' : 'Delete user account'}
+                </h3>
+                <button onClick={() => setEmailActionModal(null)} className="text-gray-400 hover:text-gray-600">
+                  <span className="text-xl leading-none">✕</span>
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-sm text-gray-600">
+                  {emailActionModal.mode === 'revoke'
+                    ? `Revoking access for "${emailActionModal.userName}" will prevent them from making bookings. Edit the notification email below before confirming.`
+                    : `Deleting "${emailActionModal.userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{email}}'}</code> will be replaced automatically.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                    value={emailActionModal.subject}
+                    onChange={(e) => setEmailActionModal((prev) => prev ? { ...prev, subject: e.target.value } : null)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email body (HTML)</label>
+                  <textarea
+                    rows={8}
+                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm font-mono"
+                    value={emailActionModal.body}
+                    onChange={(e) => setEmailActionModal((prev) => prev ? { ...prev, body: e.target.value } : null)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+                <Button variant="secondary" onClick={() => setEmailActionModal(null)} disabled={emailActionModal.isSubmitting}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmEmailAction}
+                  disabled={emailActionModal.isSubmitting}
+                  className={emailActionModal.mode === 'delete' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+                >
+                  {emailActionModal.isSubmitting
+                    ? 'Please wait…'
+                    : emailActionModal.mode === 'revoke' ? 'Revoke access & send email' : 'Delete account & send email'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bookingDeleteModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setBookingDeleteModal(null)} />
+            <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Delete booking{selectedBookingIds.size > 1 ? 's' : ''}</h3>
+                <button onClick={() => setBookingDeleteModal(null)} className="text-gray-400 hover:text-gray-600"><span className="text-xl leading-none">✕</span></button>
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Deleting {selectedBookingIds.size} booking{selectedBookingIds.size > 1 ? 's' : ''}. Each affected user will receive the following notification email.
+                </p>
+                <p className="text-xs text-gray-400">
+                  Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{amenity}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{date}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{time}}'}</code> will be replaced automatically per booking.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                    value={bookingDeleteModal.subject}
+                    onChange={(e) => setBookingDeleteModal((prev) => prev ? { ...prev, subject: e.target.value } : null)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email body (HTML)</label>
+                  <textarea
+                    rows={8}
+                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm font-mono"
+                    value={bookingDeleteModal.body}
+                    onChange={(e) => setBookingDeleteModal((prev) => prev ? { ...prev, body: e.target.value } : null)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+                <Button variant="secondary" onClick={() => setBookingDeleteModal(null)} disabled={bookingDeleteModal.isSubmitting}>Cancel</Button>
+                <Button onClick={confirmBookingDelete} disabled={bookingDeleteModal.isSubmitting} className="bg-red-600 hover:bg-red-700 text-white">
+                  {bookingDeleteModal.isSubmitting ? 'Deleting…' : `Delete & send email${selectedBookingIds.size > 1 ? 's' : ''}`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white shadow">
@@ -905,8 +1272,8 @@ export const AdminDashboard: React.FC = () => {
               key: 'smtp',
               show: setupWarnings.smtp,
               message: 'Email is not configured. Users will not receive verification emails and cannot self-register until SMTP is set up.',
-              action: 'Go to Settings',
-              tab: 'settings' as typeof activeTab,
+              action: 'Go to SMTP',
+              tab: 'smtp' as typeof activeTab,
             },
             {
               key: 'amenities',
@@ -990,8 +1357,20 @@ export const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900">All Users</h2>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center flex-wrap gap-2">
                   <span className="text-xs sm:text-sm text-gray-600">{users.length} users</span>
+                  <Button
+                    variant="secondary"
+                    onClick={() => { setPendingApprovalFilter((f) => !f); setSelectedUserIds(new Set()); }}
+                    className={`text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 ${pendingApprovalFilter ? 'ring-2 ring-amber-400 border-amber-400' : ''}`}
+                  >
+                    {pendingApprovalFilter ? 'Show all' : 'Pending approval'}
+                  </Button>
+                  {selectedUserIds.size > 0 && (
+                    <Button onClick={bulkApproveSelected} disabled={isBulkApproving} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">
+                      {isBulkApproving ? 'Approving…' : `Approve selected (${selectedUserIds.size})`}
+                    </Button>
+                  )}
                   {isAdmin && (
                     <Button variant="secondary" onClick={() => setCreateSuperOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Super User</Button>
                   )}
@@ -1047,6 +1426,7 @@ export const AdminDashboard: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
+                        {pendingApprovalFilter && <th className="px-3 py-2 sm:py-3 w-8" />}
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => { const key = 'name'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>User</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell" onClick={() => { const key = 'building'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Building</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => { const key = 'isEmailVerified'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Status</th>
@@ -1058,9 +1438,28 @@ export const AdminDashboard: React.FC = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {users
                         .filter((u) => userMatchesQuery(u, usersQuery.trim().toLowerCase()))
+                        .filter((u) => !pendingApprovalFilter || (u.isEmailVerified && !u.isApproved))
                         .sort((a, b) => (usersSortDir === 'ASC' ? 1 : -1) * compareUsersBy(a, b, usersSortBy))
                         .map((user) => (
                           <tr key={user.id}>
+                            {pendingApprovalFilter && (
+                              <td className="px-3 py-3 sm:py-4 w-8">
+                                {user.isEmailVerified && !user.isApproved && (
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-gray-300"
+                                    checked={selectedUserIds.has(user.id)}
+                                    onChange={(e) => {
+                                      setSelectedUserIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (e.target.checked) next.add(user.id); else next.delete(user.id);
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                )}
+                              </td>
+                            )}
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                               <div className="text-xs sm:text-sm font-medium text-gray-900">{user.name}</div>
                               {user.role !== 'security' && <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>}
@@ -1076,9 +1475,13 @@ export const AdminDashboard: React.FC = () => {
                               )}
                             </td>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                {user.isEmailVerified ? 'Verified' : 'Pending'}
-                              </span>
+                              {user.isEmailVerified && !user.isApproved ? (
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Pending Approval</span>
+                              ) : (
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                  {user.isEmailVerified ? 'Verified' : 'Pending'}
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden md:table-cell">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[user.role] ?? 'bg-blue-100 text-blue-800'}`}>
@@ -1090,23 +1493,164 @@ export const AdminDashboard: React.FC = () => {
                             </td>
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
                               <div className="flex space-x-1 sm:space-x-2">
+                                {user.isEmailVerified && !user.isApproved && (
+                                  <>
+                                    <Button onClick={() => approveUser(user.id)} disabled={approvingUserId === user.id} className="text-xs px-2 py-1">
+                                      {approvingUserId === user.id ? '…' : 'Approve'}
+                                    </Button>
+                                    <Button variant="secondary" onClick={() => rejectUser(user.id)} disabled={rejectingUserId === user.id} className="text-xs px-2 py-1 text-red-600 hover:text-red-900 border-red-300">
+                                      {rejectingUserId === user.id ? '…' : 'Reject'}
+                                    </Button>
+                                  </>
+                                )}
                                 {!user.isEmailVerified && (
                                   <Button variant="secondary" onClick={() => resendVerificationEmail(user.id)} disabled={resendingEmail === user.id} title="Resend verification email" className="text-blue-600 hover:text-blue-900 p-1 sm:p-2">
                                     <Mail className={`h-3 w-3 sm:h-4 sm:w-4 ${resendingEmail === user.id ? 'animate-pulse' : ''}`} />
                                   </Button>
                                 )}
-                                {user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
-                                  <Button variant="secondary" onClick={() => handleDeleteClick(user.id, user.name)} title="Delete user" className="text-red-600 hover:text-red-900 p-1 sm:p-2">
+                                {user.isApproved && user.isEmailVerified && user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
+                                  <Button variant="secondary" onClick={() => openEmailActionModal(user, 'revoke')} title="Revoke booking access" className="text-xs px-2 py-1 text-amber-600 hover:text-amber-900 border-amber-300">
+                                    Revoke
+                                  </Button>
+                                )}
+                                {user.isApproved !== false && user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
+                                  <Button variant="secondary" onClick={() => openEmailActionModal(user, 'delete')} title="Delete user account" className="text-red-600 hover:text-red-900 p-1 sm:p-2">
                                     <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </Button>
                                 )}
-                                {currentUser?.role === 'admin' && user.role !== 'admin' && renderRoleButton(user)}
+                                {currentUser?.role === 'admin' && user.role !== 'admin' && user.isApproved !== false && renderRoleButton(user)}
                               </div>
                             </td>
                           </tr>
                         ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bookings tab */}
+          {activeTab === 'bookings' && (
+            <div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Upcoming Bookings</h2>
+                {selectedBookingIds.size > 0 && (
+                  <Button
+                    onClick={() => openBookingDeleteModal(selectedBookingIds)}
+                    className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Delete selected ({selectedBookingIds.size})
+                  </Button>
+                )}
+              </div>
+
+              {/* Filters */}
+              <div className="mb-4 flex flex-col sm:flex-row gap-2">
+                <input
+                  type="date"
+                  className="rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+                  value={bookingsDateFilter}
+                  onChange={(e) => setBookingsDateFilter(e.target.value)}
+                  title="Filter by date"
+                />
+                <select
+                  className="rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+                  value={bookingsAmenityFilter}
+                  onChange={(e) => setBookingsAmenityFilter(e.target.value)}
+                >
+                  <option value="">All amenities</option>
+                  {[...new Set(adminBookings.map((b) => b.amenityName))].sort().map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <input
+                  className="flex-1 rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+                  placeholder="Search by name, email, building, apartment…"
+                  value={bookingsQuery}
+                  onChange={(e) => setBookingsQuery(e.target.value)}
+                />
+                {(bookingsDateFilter || bookingsAmenityFilter || bookingsQuery) && (
+                  <Button variant="secondary" className="text-xs sm:text-sm px-3 py-2" onClick={() => { setBookingsDateFilter(''); setBookingsAmenityFilter(''); setBookingsQuery(''); }}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+
+              {isLoadingBookings ? (
+                <TabLoadingSpinner message="Loading bookings…" />
+              ) : (
+                <div className="overflow-x-auto -mx-6 sm:mx-0">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 sm:py-3 w-8" />
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenity</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Building / Apt</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {adminBookings
+                        .filter((b) => !bookingsDateFilter || b.date === bookingsDateFilter)
+                        .filter((b) => !bookingsAmenityFilter || b.amenityName === bookingsAmenityFilter)
+                        .filter((b) => {
+                          const q = bookingsQuery.trim().toLowerCase();
+                          if (!q) return true;
+                          return (
+                            b.userName.toLowerCase().includes(q) ||
+                            b.userEmail.toLowerCase().includes(q) ||
+                            b.userBuilding.toLowerCase().includes(q) ||
+                            b.userApartmentNumber.toLowerCase().includes(q) ||
+                            b.amenityName.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((booking) => (
+                          <tr key={booking.id}>
+                            <td className="px-3 py-3 sm:py-4 w-8">
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300"
+                                checked={selectedBookingIds.has(booking.id)}
+                                onChange={(e) => {
+                                  setSelectedBookingIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(booking.id); else next.delete(booking.id);
+                                    return next;
+                                  });
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900">{booking.amenityName}</td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">{formatIsoDateToDmy(booking.date)}</td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">{booking.startTime} ({booking.slotLength} min)</td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900">{booking.userName}</div>
+                              <div className="text-xs text-gray-500">{booking.userEmail}</div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 hidden sm:table-cell">
+                              {booking.userBuilding} / {booking.userApartmentNumber}
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                              <Button
+                                variant="secondary"
+                                onClick={() => openBookingDeleteModal(new Set([booking.id]))}
+                                title="Delete booking"
+                                className="text-red-600 hover:text-red-900 p-1 sm:p-2"
+                              >
+                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {adminBookings.length === 0 && !isLoadingBookings && (
+                    <p className="text-sm text-gray-500 text-center py-8">No upcoming bookings.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -1177,10 +1721,131 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* Settings tab */}
-          {activeTab === 'settings' && isAdmin && (
+          {activeTab === 'settings' && (isAdmin || isSuper) && (
             <div>
               <div className="mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+              </div>
+
+              {isLoadingCheckin ? (
+                <TabLoadingSpinner message="Loading settings..." />
+              ) : (
+                <div className="space-y-6">
+                <Card>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-base font-medium text-gray-900 mb-1">Check-In (QR Code Registration)</h3>
+                      <p className="text-sm text-gray-600">
+                        When enabled, residents receive a check-in link before their booking and must scan the QR code posted at the amenity to confirm attendance.
+                        When disabled, no check-in emails are sent and QR codes will not be accepted.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                      <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${checkinEnabled ? 'text-green-700' : 'text-gray-500'}`}>
+                        <span className={`w-2 h-2 rounded-full ${checkinEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {checkinEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {checkinNewQrCount !== null && checkinEnabled && (
+                    <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                      {checkinNewQrCount > 0
+                        ? `Check-in enabled. QR codes were generated for ${checkinNewQrCount} ${checkinNewQrCount === 1 ? 'amenity' : 'amenities'} that did not have one. Go to Amenities to download and print them.`
+                        : 'Check-in enabled. All amenities already had QR codes — no changes needed.'}
+                    </div>
+                  )}
+
+                  {checkinNewQrCount !== null && !checkinEnabled && (
+                    <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
+                      Check-in disabled. Existing QR codes have been kept and can be re-enabled at any time.
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex gap-3">
+                    {checkinEnabled ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => toggleCheckin(false)}
+                        disabled={isTogglingCheckin || checkinEnabled === null}
+                      >
+                        {isTogglingCheckin ? 'Saving…' : 'Disable Check-In'}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => toggleCheckin(true)}
+                        disabled={isTogglingCheckin || checkinEnabled === null}
+                      >
+                        {isTogglingCheckin ? 'Saving…' : 'Enable Check-In'}
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+
+                <Card>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-base font-medium text-gray-900 mb-1">Admin Approval Required</h3>
+                      <p className="text-sm text-gray-600">
+                        When enabled, new users must be manually approved by an admin before they can make bookings.
+                        Admins receive an hourly email notification when users are waiting for approval.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                      <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${approvalEnabled ? 'text-green-700' : 'text-gray-500'}`}>
+                        <span className={`w-2 h-2 rounded-full ${approvalEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {approvalEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount > 0 && (
+                    <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                      Admin Approval disabled. {approvalAutoApprovedCount} pending {approvalAutoApprovedCount === 1 ? 'user was' : 'users were'} automatically approved.
+                    </div>
+                  )}
+
+                  {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount === 0 && (
+                    <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
+                      Admin Approval disabled. No users were pending approval.
+                    </div>
+                  )}
+
+                  {approvalEnabled && (
+                    <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                      Note: Disabling this setting will automatically approve all currently pending users.
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex gap-3">
+                    {approvalEnabled ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => toggleApproval(false)}
+                        disabled={isTogglingApproval || approvalEnabled === null}
+                      >
+                        {isTogglingApproval ? 'Saving…' : 'Disable Approval Requirement'}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => toggleApproval(true)}
+                        disabled={isTogglingApproval || approvalEnabled === null}
+                      >
+                        {isTogglingApproval ? 'Saving…' : 'Enable Approval Requirement'}
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SMTP tab */}
+          {activeTab === 'smtp' && isAdmin && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">SMTP</h2>
               </div>
 
               {isLoadingSettings ? (
