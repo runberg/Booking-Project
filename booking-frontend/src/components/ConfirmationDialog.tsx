@@ -60,7 +60,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
         <button
           type="button"
           aria-label="Close dialog"
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity cursor-default"
+          className="fixed inset-0 bg-black/20 transition-opacity cursor-default"
           onClick={onCancel}
         />
         

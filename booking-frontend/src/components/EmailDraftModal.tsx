@@ -49,7 +49,7 @@ export const EmailDraftModal: React.FC<EmailDraftModalProps> = ({
         <button
           type="button"
           aria-label="Close"
-          className="fixed inset-0 bg-black bg-opacity-50 cursor-default"
+          className="fixed inset-0 bg-black/20 cursor-default"
           onClick={onClose}
         />
         <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl">

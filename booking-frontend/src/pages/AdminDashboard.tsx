@@ -2170,7 +2170,7 @@ export const AdminDashboard: React.FC = () => {
       {createSuperOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateSuperOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setCreateSuperOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Super User</h3>
               <div className="space-y-3">
@@ -2202,7 +2202,7 @@ export const AdminDashboard: React.FC = () => {
       {createSecurityOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateSecurityOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setCreateSecurityOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-1">Create Security User</h3>
               <p className="text-sm text-gray-500 mb-4">Security users log in with their username and password. They have read-only access to the security dashboard.</p>

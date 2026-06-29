@@ -303,7 +303,7 @@ export const AmenitiesAdmin: React.FC = () => {
       {createOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setCreateOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Add Amenity</h3>
@@ -398,7 +398,7 @@ export const AmenitiesAdmin: React.FC = () => {
       {/* QR Code Modal */}
       {qrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setQrModal(null)} />
+          <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setQrModal(null)} />
           <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center">
             <h3 className="text-lg font-semibold text-gray-900 mb-1">{qrModal.amenity.name}</h3>
             <p className="text-xs text-gray-500 mb-4">Print and place this QR code at the amenity. Residents scan it to check in.</p>
@@ -419,7 +419,7 @@ export const AmenitiesAdmin: React.FC = () => {
       {createRestrictionOpen && (
         <div className="fixed inset-0 z-50">
           <div className="flex min-h-screen items-center justify-center p-4">
-            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setCreateRestrictionOpen(false)} />
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setCreateRestrictionOpen(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Add Restriction</h3>

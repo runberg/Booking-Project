@@ -662,7 +662,7 @@ export const BookingPage: React.FC = () => {
         {selected && (
           <div className="fixed inset-0 z-50">
             <div className="flex min-h-screen items-center justify-center p-4">
-              <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setSelected(null)} />
+              <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setSelected(null)} />
               <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0 pr-2">
@@ -699,7 +699,7 @@ export const BookingPage: React.FC = () => {
         {deleteConfirm.open && (
           <div className="fixed inset-0 z-50">
             <div className="flex min-h-screen items-center justify-center p-4">
-              <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setDeleteConfirm({ open: false, bookingId: null })} />
+              <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setDeleteConfirm({ open: false, bookingId: null })} />
               <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete booking</h3>
                 <p className="text-sm text-gray-600">Are you sure you want to delete this booking?</p>
