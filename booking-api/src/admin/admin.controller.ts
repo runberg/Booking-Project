@@ -134,15 +134,15 @@ export class AdminController {
   }
 
   @Post('users/:id/reject')
-  async rejectUser(@Param('id') id: string) {
+  async rejectUser(
+    @Param('id') id: string,
+    @Body() body: { subject: string; emailBody: string },
+  ) {
     const user = await this.usersService.findById(id);
     if (!user) throw new NotFoundException('User not found');
-    await this.emailService.sendTemplateEmail(
-      user.email,
-      'Account application not approved',
-      'user_rejected',
-      { name: user.name },
-    );
+    const subject = this.interpolateUser(body.subject, user.name, user.email);
+    const html = this.interpolateUser(body.emailBody, user.name, user.email);
+    await this.emailService.sendHtmlEmail(user.email, subject, html);
     await this.bookingsService.deleteAllForUser(id);
     await this.usersService.deleteUser(id);
     return { message: 'User rejected and removed' };

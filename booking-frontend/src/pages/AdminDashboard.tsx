@@ -101,9 +101,11 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
   return copy;
 }
 
-function getEmailActionConfirmLabel(mode: 'revoke' | 'delete', isSubmitting: boolean): string {
+function getEmailActionConfirmLabel(mode: 'revoke' | 'delete' | 'reject', isSubmitting: boolean): string {
   if (isSubmitting) return 'Please wait…';
-  return mode === 'revoke' ? 'Revoke access & send email' : 'Delete account & send email';
+  if (mode === 'revoke') return 'Revoke access & send email';
+  if (mode === 'reject') return 'Reject & send email';
+  return 'Delete account & send email';
 }
 
 function getBookingDeleteConfirmLabel(isSubmitting: boolean, count: number): string {
@@ -127,7 +129,7 @@ export const AdminDashboard: React.FC = () => {
     message: string;
   } | null>(null);
   const [emailActionModal, setEmailActionModal] = useState<{
-    mode: 'revoke' | 'delete';
+    mode: 'revoke' | 'delete' | 'reject';
     userId: string;
     userName: string;
     subject: string;
@@ -180,7 +182,6 @@ export const AdminDashboard: React.FC = () => {
   const [pendingApprovalFilter, setPendingApprovalFilter] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [approvingUserId, setApprovingUserId] = useState<string | null>(null);
-  const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
 
   // SMTP settings state
@@ -384,18 +385,6 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const rejectUser = async (userId: string) => {
-    setRejectingUserId(userId);
-    try {
-      await api.post(`/admin/users/${userId}/reject`);
-      setNotification({ type: 'success', message: 'User rejected and removed' });
-      fetchUsers();
-    } catch (e: any) {
-      setNotification({ type: 'error', message: e.response?.data?.message || 'Failed to reject user' });
-    } finally {
-      setRejectingUserId(null);
-    }
-  };
 
   const bulkApproveSelected = async () => {
     if (selectedUserIds.size === 0) return;
@@ -480,8 +469,8 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const openEmailActionModal = async (user: User, mode: 'revoke' | 'delete') => {
-    const templateKey = mode === 'revoke' ? 'user_access_revoked' : 'user_account_deleted';
+  const openEmailActionModal = async (user: User, mode: 'revoke' | 'delete' | 'reject') => {
+    const templateKey = mode === 'revoke' ? 'user_access_revoked' : mode === 'reject' ? 'user_rejected' : 'user_account_deleted';
     try {
       const { data } = await api.get('/admin/email-templates');
       const tpl = data.find((t: any) => t.key === templateKey);
@@ -503,10 +492,12 @@ export const AdminDashboard: React.FC = () => {
     setEmailActionModal((prev) => prev ? { ...prev, isSubmitting: true } : null);
     const endpoint = emailActionModal.mode === 'revoke'
       ? `/admin/users/${emailActionModal.userId}/revoke`
-      : `/admin/users/${emailActionModal.userId}/delete-account`;
+      : emailActionModal.mode === 'reject'
+        ? `/admin/users/${emailActionModal.userId}/reject`
+        : `/admin/users/${emailActionModal.userId}/delete-account`;
     try {
       await api.post(endpoint, { subject: emailActionModal.subject, emailBody: emailActionModal.body });
-      const msg = emailActionModal.mode === 'revoke' ? 'User access revoked' : 'User account deleted';
+      const msg = emailActionModal.mode === 'revoke' ? 'User access revoked' : emailActionModal.mode === 'reject' ? 'User rejected' : 'User account deleted';
       setNotification({ type: 'success', message: msg });
       setEmailActionModal(null);
       fetchUsers();
@@ -1287,8 +1278,8 @@ export const AdminDashboard: React.FC = () => {
                             <Button onClick={() => approveUser(user.id)} disabled={approvingUserId === user.id} className="text-xs px-2 py-1">
                               {approvingUserId === user.id ? '…' : 'Approve'}
                             </Button>
-                            <Button variant="secondary" onClick={() => rejectUser(user.id)} disabled={rejectingUserId === user.id} className="text-xs px-2 py-1 text-red-600 hover:text-red-900 border-red-300">
-                              {rejectingUserId === user.id ? '…' : 'Reject'}
+                            <Button variant="secondary" onClick={() => openEmailActionModal(user, 'reject')} className="text-xs px-2 py-1 text-red-600 hover:text-red-900 border-red-300">
+                              Reject
                             </Button>
                           </>
                         )}
@@ -1857,13 +1848,19 @@ export const AdminDashboard: React.FC = () => {
 
       {emailActionModal && (
         <EmailDraftModal
-          title={emailActionModal.mode === 'revoke' ? 'Revoke booking access' : 'Delete user account'}
+          title={emailActionModal.mode === 'revoke' ? 'Revoke booking access' : emailActionModal.mode === 'reject' ? 'Reject account application' : 'Delete user account'}
           description={
             emailActionModal.mode === 'revoke'
               ? `Revoking access for "${emailActionModal.userName}" will prevent them from making bookings. Edit the notification email below before confirming.`
-              : `Deleting "${emailActionModal.userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`
+              : emailActionModal.mode === 'reject'
+                ? `Rejecting "${emailActionModal.userName}" will remove their account. Edit the notification email below before confirming.`
+                : `Deleting "${emailActionModal.userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`
           }
-          variablesHint={<>Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{email}}'}</code> will be replaced automatically.</>}
+          variablesHint={
+            emailActionModal.mode === 'reject'
+              ? <>Variable <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> will be replaced automatically.</>
+              : <>Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{email}}'}</code> will be replaced automatically.</>
+          }
           subject={emailActionModal.subject}
           body={emailActionModal.body}
           onSubjectChange={(v) => setEmailActionModal((prev) => prev ? { ...prev, subject: v } : null)}
@@ -1872,7 +1869,7 @@ export const AdminDashboard: React.FC = () => {
           onConfirm={confirmEmailAction}
           isSubmitting={emailActionModal.isSubmitting}
           confirmLabel={getEmailActionConfirmLabel(emailActionModal.mode, emailActionModal.isSubmitting)}
-          confirmClassName={emailActionModal.mode === 'delete' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+          confirmClassName={emailActionModal.mode === 'delete' || emailActionModal.mode === 'reject' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
         />
       )}
 

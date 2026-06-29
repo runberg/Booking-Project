@@ -90,6 +90,7 @@ export const RichEmailEditor: React.FC<Props> = ({
         <button type="button" className={`${fmtBtn} italic`} title="Italic" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}>I</button>
         <button type="button" className={fmtBtn} title="Heading 1" onMouseDown={(e) => { e.preventDefault(); exec('formatBlock', 'h1'); }}>H1</button>
         <button type="button" className={fmtBtn} title="Heading 2" onMouseDown={(e) => { e.preventDefault(); exec('formatBlock', 'h2'); }}>H2</button>
+        <button type="button" className={fmtBtn} title="Align left" onMouseDown={(e) => { e.preventDefault(); exec('justifyLeft'); }}>Left</button>
         <button type="button" className={fmtBtn} title="Center" onMouseDown={(e) => { e.preventDefault(); exec('justifyCenter'); }}>Center</button>
         <button type="button" className={fmtBtn} title="Normal text" onMouseDown={(e) => { e.preventDefault(); exec('formatBlock', 'div'); }}>Normal</button>
       </div>
