@@ -11,6 +11,8 @@ import { authService, api, API_BASE_URL } from '../services/authService';
 import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
 import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
 import { TimingControl } from '../components/TimingControl';
+import { EmailDraftModal } from '../components/EmailDraftModal';
+import { FeatureToggleCard } from '../components/FeatureToggleCard';
 
 interface User {
   id: string;
@@ -1134,109 +1136,41 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {emailActionModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setEmailActionModal(null)} />
-            <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl">
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {emailActionModal.mode === 'revoke' ? 'Revoke booking access' : 'Delete user account'}
-                </h3>
-                <button onClick={() => setEmailActionModal(null)} className="text-gray-400 hover:text-gray-600">
-                  <span className="text-xl leading-none">✕</span>
-                </button>
-              </div>
-              <div className="p-4 space-y-4">
-                <p className="text-sm text-gray-600">
-                  {emailActionModal.mode === 'revoke'
-                    ? `Revoking access for "${emailActionModal.userName}" will prevent them from making bookings. Edit the notification email below before confirming.`
-                    : `Deleting "${emailActionModal.userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`}
-                </p>
-                <p className="text-xs text-gray-400">
-                  Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{email}}'}</code> will be replaced automatically.
-                </p>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                    value={emailActionModal.subject}
-                    onChange={(e) => setEmailActionModal((prev) => prev ? { ...prev, subject: e.target.value } : null)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Email body (HTML)</label>
-                  <textarea
-                    rows={8}
-                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm font-mono"
-                    value={emailActionModal.body}
-                    onChange={(e) => setEmailActionModal((prev) => prev ? { ...prev, body: e.target.value } : null)}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
-                <Button variant="secondary" onClick={() => setEmailActionModal(null)} disabled={emailActionModal.isSubmitting}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={confirmEmailAction}
-                  disabled={emailActionModal.isSubmitting}
-                  className={emailActionModal.mode === 'delete' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
-                >
-                  {emailActionModal.isSubmitting
-                    ? 'Please wait…'
-                    : emailActionModal.mode === 'revoke' ? 'Revoke access & send email' : 'Delete account & send email'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EmailDraftModal
+          title={emailActionModal.mode === 'revoke' ? 'Revoke booking access' : 'Delete user account'}
+          description={
+            emailActionModal.mode === 'revoke'
+              ? `Revoking access for "${emailActionModal.userName}" will prevent them from making bookings. Edit the notification email below before confirming.`
+              : `Deleting "${emailActionModal.userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`
+          }
+          variablesHint={<>Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{email}}'}</code> will be replaced automatically.</>}
+          subject={emailActionModal.subject}
+          body={emailActionModal.body}
+          onSubjectChange={(v) => setEmailActionModal((prev) => prev ? { ...prev, subject: v } : null)}
+          onBodyChange={(v) => setEmailActionModal((prev) => prev ? { ...prev, body: v } : null)}
+          onClose={() => setEmailActionModal(null)}
+          onConfirm={confirmEmailAction}
+          isSubmitting={emailActionModal.isSubmitting}
+          confirmLabel={emailActionModal.isSubmitting ? 'Please wait…' : emailActionModal.mode === 'revoke' ? 'Revoke access & send email' : 'Delete account & send email'}
+          confirmClassName={emailActionModal.mode === 'delete' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+        />
       )}
 
       {bookingDeleteModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <button type="button" aria-label="Close" className="fixed inset-0 bg-black bg-opacity-50 cursor-default" onClick={() => setBookingDeleteModal(null)} />
-            <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl">
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Delete booking{selectedBookingIds.size > 1 ? 's' : ''}</h3>
-                <button onClick={() => setBookingDeleteModal(null)} className="text-gray-400 hover:text-gray-600"><span className="text-xl leading-none">✕</span></button>
-              </div>
-              <div className="p-4 space-y-4">
-                <p className="text-sm text-gray-600">
-                  Deleting {selectedBookingIds.size} booking{selectedBookingIds.size > 1 ? 's' : ''}. Each affected user will receive the following notification email.
-                </p>
-                <p className="text-xs text-gray-400">
-                  Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{amenity}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{date}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{time}}'}</code> will be replaced automatically per booking.
-                </p>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                    value={bookingDeleteModal.subject}
-                    onChange={(e) => setBookingDeleteModal((prev) => prev ? { ...prev, subject: e.target.value } : null)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Email body (HTML)</label>
-                  <textarea
-                    rows={8}
-                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm font-mono"
-                    value={bookingDeleteModal.body}
-                    onChange={(e) => setBookingDeleteModal((prev) => prev ? { ...prev, body: e.target.value } : null)}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
-                <Button variant="secondary" onClick={() => setBookingDeleteModal(null)} disabled={bookingDeleteModal.isSubmitting}>Cancel</Button>
-                <Button onClick={confirmBookingDelete} disabled={bookingDeleteModal.isSubmitting} className="bg-red-600 hover:bg-red-700 text-white">
-                  {bookingDeleteModal.isSubmitting ? 'Deleting…' : `Delete & send email${selectedBookingIds.size > 1 ? 's' : ''}`}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EmailDraftModal
+          title={`Delete booking${selectedBookingIds.size > 1 ? 's' : ''}`}
+          description={`Deleting ${selectedBookingIds.size} booking${selectedBookingIds.size > 1 ? 's' : ''}. Each affected user will receive the following notification email.`}
+          variablesHint={<>Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{amenity}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{date}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{time}}'}</code> will be replaced automatically per booking.</>}
+          subject={bookingDeleteModal.subject}
+          body={bookingDeleteModal.body}
+          onSubjectChange={(v) => setBookingDeleteModal((prev) => prev ? { ...prev, subject: v } : null)}
+          onBodyChange={(v) => setBookingDeleteModal((prev) => prev ? { ...prev, body: v } : null)}
+          onClose={() => setBookingDeleteModal(null)}
+          onConfirm={confirmBookingDelete}
+          isSubmitting={bookingDeleteModal.isSubmitting}
+          confirmLabel={bookingDeleteModal.isSubmitting ? 'Deleting…' : `Delete & send email${selectedBookingIds.size > 1 ? 's' : ''}`}
+          confirmClassName="bg-red-600 hover:bg-red-700 text-white"
+        />
       )}
 
       {/* Header */}
@@ -1731,23 +1665,16 @@ export const AdminDashboard: React.FC = () => {
                 <TabLoadingSpinner message="Loading settings..." />
               ) : (
                 <div className="space-y-6">
-                <Card>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <h3 className="text-base font-medium text-gray-900 mb-1">Check-In (QR Code Registration)</h3>
-                      <p className="text-sm text-gray-600">
-                        When enabled, residents receive a check-in link before their booking and must scan the QR code posted at the amenity to confirm attendance.
-                        When disabled, no check-in emails are sent and QR codes will not be accepted.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                      <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${checkinEnabled ? 'text-green-700' : 'text-gray-500'}`}>
-                        <span className={`w-2 h-2 rounded-full ${checkinEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {checkinEnabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                  </div>
-
+                <FeatureToggleCard
+                  title="Check-In (QR Code Registration)"
+                  description="When enabled, residents receive a check-in link before their booking and must scan the QR code posted at the amenity to confirm attendance. When disabled, no check-in emails are sent and QR codes will not be accepted."
+                  isEnabled={checkinEnabled}
+                  isToggling={isTogglingCheckin}
+                  enableLabel="Enable Check-In"
+                  disableLabel="Disable Check-In"
+                  onEnable={() => toggleCheckin(true)}
+                  onDisable={() => toggleCheckin(false)}
+                >
                   {checkinNewQrCount !== null && checkinEnabled && (
                     <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
                       {checkinNewQrCount > 0
@@ -1755,87 +1682,39 @@ export const AdminDashboard: React.FC = () => {
                         : 'Check-in enabled. All amenities already had QR codes — no changes needed.'}
                     </div>
                   )}
-
                   {checkinNewQrCount !== null && !checkinEnabled && (
                     <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
                       Check-in disabled. Existing QR codes have been kept and can be re-enabled at any time.
                     </div>
                   )}
+                </FeatureToggleCard>
 
-                  <div className="mt-5 flex gap-3">
-                    {checkinEnabled ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => toggleCheckin(false)}
-                        disabled={isTogglingCheckin || checkinEnabled === null}
-                      >
-                        {isTogglingCheckin ? 'Saving…' : 'Disable Check-In'}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => toggleCheckin(true)}
-                        disabled={isTogglingCheckin || checkinEnabled === null}
-                      >
-                        {isTogglingCheckin ? 'Saving…' : 'Enable Check-In'}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-
-                <Card>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <h3 className="text-base font-medium text-gray-900 mb-1">Admin Approval Required</h3>
-                      <p className="text-sm text-gray-600">
-                        When enabled, new users must be manually approved by an admin before they can make bookings.
-                        Admins receive an hourly email notification when users are waiting for approval.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                      <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${approvalEnabled ? 'text-green-700' : 'text-gray-500'}`}>
-                        <span className={`w-2 h-2 rounded-full ${approvalEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {approvalEnabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                  </div>
-
+                <FeatureToggleCard
+                  title="Admin Approval Required"
+                  description="When enabled, new users must be manually approved by an admin before they can make bookings. Admins receive an hourly email notification when users are waiting for approval."
+                  isEnabled={approvalEnabled}
+                  isToggling={isTogglingApproval}
+                  enableLabel="Enable Approval Requirement"
+                  disableLabel="Disable Approval Requirement"
+                  onEnable={() => toggleApproval(true)}
+                  onDisable={() => toggleApproval(false)}
+                >
                   {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount > 0 && (
                     <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
                       Admin Approval disabled. {approvalAutoApprovedCount} pending {approvalAutoApprovedCount === 1 ? 'user was' : 'users were'} automatically approved.
                     </div>
                   )}
-
                   {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount === 0 && (
                     <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
                       Admin Approval disabled. No users were pending approval.
                     </div>
                   )}
-
                   {approvalEnabled && (
                     <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
                       Note: Disabling this setting will automatically approve all currently pending users.
                     </div>
                   )}
-
-                  <div className="mt-5 flex gap-3">
-                    {approvalEnabled ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => toggleApproval(false)}
-                        disabled={isTogglingApproval || approvalEnabled === null}
-                      >
-                        {isTogglingApproval ? 'Saving…' : 'Disable Approval Requirement'}
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => toggleApproval(true)}
-                        disabled={isTogglingApproval || approvalEnabled === null}
-                      >
-                        {isTogglingApproval ? 'Saving…' : 'Enable Approval Requirement'}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
+                </FeatureToggleCard>
                 </div>
               )}
             </div>
