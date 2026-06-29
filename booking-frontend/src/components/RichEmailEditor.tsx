@@ -7,15 +7,29 @@ function decorateVariables(html: string): string {
   const pill = (name: string) =>
     `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:0.85em">{{${name}}}</span>`;
 
-  // Split on HTML tags so the variable replacement only runs on text nodes,
-  // avoiding a combined alternation regex that SonarQube flags as ReDoS-prone.
-  return html
-    .split(/(<[^>]*>)/)
-    .map((part, i) => {
-      if (i % 2 === 1) return part; // odd indices are captured HTML tags — leave untouched
-      return part.replace(/\{\{(\w+)\}\}/g, (_, varName: string) => pill(varName));
-    })
-    .join('');
+  const replaceVars = (text: string) => text.replace(/\{\{(\w+)\}\}/g, (_, v: string) => pill(v));
+
+  // Walk the string via indexOf to avoid a regex-based split on HTML tags.
+  const parts: string[] = [];
+  let pos = 0;
+  while (pos < html.length) {
+    const tagStart = html.indexOf('<', pos);
+    if (tagStart === -1) {
+      parts.push(replaceVars(html.slice(pos)));
+      break;
+    }
+    if (tagStart > pos) {
+      parts.push(replaceVars(html.slice(pos, tagStart)));
+    }
+    const tagEnd = html.indexOf('>', tagStart);
+    if (tagEnd === -1) {
+      parts.push(replaceVars(html.slice(tagStart)));
+      break;
+    }
+    parts.push(html.slice(tagStart, tagEnd + 1));
+    pos = tagEnd + 1;
+  }
+  return parts.join('');
 }
 
 interface Props {

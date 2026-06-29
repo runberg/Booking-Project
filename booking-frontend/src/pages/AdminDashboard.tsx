@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Notification } from '../components/Notification';
-import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { Users, LogOut, Trash2, Mail, Menu, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { AmenitiesAdmin } from './AmenitiesAdmin';
 import { RichEmailEditor } from '../components/RichEmailEditor';
@@ -100,6 +99,22 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
     copy.push({ key: patch.key, subject: patch.subject ?? null, body: patch.body ?? '' });
   }
   return copy;
+}
+
+function getEmailActionConfirmLabel(mode: 'revoke' | 'delete', isSubmitting: boolean): string {
+  if (isSubmitting) return 'Please wait…';
+  return mode === 'revoke' ? 'Revoke access & send email' : 'Delete account & send email';
+}
+
+function getBookingDeleteConfirmLabel(isSubmitting: boolean, count: number): string {
+  if (isSubmitting) return 'Deleting…';
+  return `Delete & send email${count > 1 ? 's' : ''}`;
+}
+
+function getCheckinQrMessage(qrCount: number): string {
+  if (qrCount === 0) return 'Check-in enabled. All amenities already had QR codes — no changes needed.';
+  const unit = qrCount === 1 ? 'amenity' : 'amenities';
+  return `Check-in enabled. QR codes were generated for ${qrCount} ${unit} that did not have one. Go to Amenities to download and print them.`;
 }
 
 export const AdminDashboard: React.FC = () => {
@@ -804,7 +819,7 @@ export const AdminDashboard: React.FC = () => {
                       <div>
                         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Current units ({buildingUnits[b.id].length})</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {buildingUnits[b.id].sort().map((u) => (
+                          {[...buildingUnits[b.id]].sort((a, b) => a.localeCompare(b)).map((u) => (
                             <span key={u} className="inline-flex px-2 py-0.5 text-xs bg-white border border-gray-300 rounded text-gray-700">{u}</span>
                           ))}
                         </div>
@@ -1124,6 +1139,709 @@ export const AdminDashboard: React.FC = () => {
     );
   };
 
+  const renderUsersContent = () => {
+    const toggleUserSelection = (userId: string, checked: boolean) => {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(userId); else next.delete(userId);
+        return next;
+      });
+    };
+    return (<div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">All Users</h2>
+        <div className="flex items-center flex-wrap gap-2">
+          <span className="text-xs sm:text-sm text-gray-600">{users.length} users</span>
+          <Button
+            variant="secondary"
+            onClick={() => { setPendingApprovalFilter((f) => !f); setSelectedUserIds(new Set()); }}
+            className={`text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 ${pendingApprovalFilter ? 'ring-2 ring-amber-400 border-amber-400' : ''}`}
+          >
+            {pendingApprovalFilter ? 'Show all' : 'Pending approval'}
+          </Button>
+          {selectedUserIds.size > 0 && (
+            <Button onClick={bulkApproveSelected} disabled={isBulkApproving} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">
+              {isBulkApproving ? 'Approving…' : `Approve selected (${selectedUserIds.size})`}
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="secondary" onClick={() => setCreateSuperOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Super User</Button>
+          )}
+          {(isAdmin || isSuper) && (
+            <Button variant="secondary" onClick={() => setCreateSecurityOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Security User</Button>
+          )}
+        </div>
+      </div>
+
+      {/* Role reference */}
+      <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors"
+          onClick={() => setRoleInfoOpen((s) => !s)}
+        >
+          <span>User roles</span>
+          <span className="text-gray-400 text-xs">{roleInfoOpen ? '▲ hide' : '▼ show'}</span>
+        </button>
+        {roleInfoOpen && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-200 border-t border-gray-200">
+            {[
+              { role: 'user', label: 'User', description: 'Regular resident. Can create and cancel their own bookings within the configured restrictions.' },
+              { role: 'super', label: 'Super', description: 'Trusted staff. Full read and manage access — buildings, amenities, logs, settings — but cannot create or promote user accounts.' },
+              { role: 'admin', label: 'Admin', description: 'Full access. Can create and manage all user accounts, assign roles, and configure every part of the system.' },
+              { role: 'security', label: 'Security', description: 'Read-only view of the security dashboard. Can see the current and next booking for every amenity with full resident details. Cannot make bookings.' },
+            ].map(({ role, label, description }) => (
+              <div key={label} className="px-4 py-3 space-y-1.5">
+                <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[role] ?? 'bg-gray-100 text-gray-800'}`}>{label}</span>
+                <p className="text-xs text-gray-600 leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <input
+            className="w-full rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+            placeholder="Search users..."
+            value={usersQuery}
+            onChange={(e) => setUsersQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') setUsersQuery((s) => s.trim()); }}
+          />
+          <Button variant="secondary" onClick={() => setUsersQuery((s) => s.trim())} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 w-full sm:w-auto">Search</Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <TabLoadingSpinner message="Loading users..." />
+      ) : (
+        <div className="overflow-x-auto -mx-6 sm:mx-0">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {pendingApprovalFilter && <th className="px-3 py-2 sm:py-3 w-8" />}
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => { const key = 'name'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>User</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell" onClick={() => { const key = 'building'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Building</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => { const key = 'isEmailVerified'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Status</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden md:table-cell" onClick={() => { const key = 'role'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Role</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell" onClick={() => { const key = 'createdAt'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Created</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {users
+                .filter((u) => userMatchesQuery(u, usersQuery.trim().toLowerCase()))
+                .filter((u) => !pendingApprovalFilter || (u.isEmailVerified && !u.isApproved))
+                .sort((a, b) => (usersSortDir === 'ASC' ? 1 : -1) * compareUsersBy(a, b, usersSortBy))
+                .map((user) => (
+                  <tr key={user.id}>
+                    {pendingApprovalFilter && (
+                      <td className="px-3 py-3 sm:py-4 w-8">
+                        {user.isEmailVerified && !user.isApproved && (
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300"
+                            checked={selectedUserIds.has(user.id)}
+                            onChange={(e) => toggleUserSelection(user.id, e.target.checked)}
+                          />
+                        )}
+                      </td>
+                    )}
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm font-medium text-gray-900">{user.name}</div>
+                      {user.role !== 'security' && <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden sm:table-cell">
+                      {user.role === 'security' ? (
+                        <div className="text-xs sm:text-sm text-gray-400">—</div>
+                      ) : (
+                        <>
+                          <div className="text-xs sm:text-sm text-gray-900">{user.building}</div>
+                          <div className="text-xs sm:text-sm text-gray-500">Apt {user.apartmentNumber}</div>
+                        </>
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      {user.isEmailVerified && !user.isApproved ? (
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Pending Approval</span>
+                      ) : (
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                          {user.isEmailVerified ? 'Verified' : 'Pending'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden md:table-cell">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[user.role] ?? 'bg-blue-100 text-blue-800'}`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 hidden sm:table-cell">
+                      {formatDateTimeDmy(user.createdAt).split(' ')[0]}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
+                      <div className="flex space-x-1 sm:space-x-2">
+                        {user.isEmailVerified && !user.isApproved && (
+                          <>
+                            <Button onClick={() => approveUser(user.id)} disabled={approvingUserId === user.id} className="text-xs px-2 py-1">
+                              {approvingUserId === user.id ? '…' : 'Approve'}
+                            </Button>
+                            <Button variant="secondary" onClick={() => rejectUser(user.id)} disabled={rejectingUserId === user.id} className="text-xs px-2 py-1 text-red-600 hover:text-red-900 border-red-300">
+                              {rejectingUserId === user.id ? '…' : 'Reject'}
+                            </Button>
+                          </>
+                        )}
+                        {!user.isEmailVerified && (
+                          <Button variant="secondary" onClick={() => resendVerificationEmail(user.id)} disabled={resendingEmail === user.id} title="Resend verification email" className="text-blue-600 hover:text-blue-900 p-1 sm:p-2">
+                            <Mail className={`h-3 w-3 sm:h-4 sm:w-4 ${resendingEmail === user.id ? 'animate-pulse' : ''}`} />
+                          </Button>
+                        )}
+                        {user.isApproved && user.isEmailVerified && user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
+                          <Button variant="secondary" onClick={() => openEmailActionModal(user, 'revoke')} title="Revoke booking access" className="text-xs px-2 py-1 text-amber-600 hover:text-amber-900 border-amber-300">
+                            Revoke
+                          </Button>
+                        )}
+                        {user.isApproved !== false && user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
+                          <Button variant="secondary" onClick={() => openEmailActionModal(user, 'delete')} title="Delete user account" className="text-red-600 hover:text-red-900 p-1 sm:p-2">
+                            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                        )}
+                        {currentUser?.role === 'admin' && user.role !== 'admin' && user.isApproved !== false && renderRoleButton(user)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+    );
+  };
+
+  const renderBookingsContent = () => {
+    const toggleBookingSelection = (bookingId: string, checked: boolean) => {
+      setSelectedBookingIds((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(bookingId); else next.delete(bookingId);
+        return next;
+      });
+    };
+    return (
+    <div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Upcoming Bookings</h2>
+        {selectedBookingIds.size > 0 && (
+          <Button
+            onClick={() => openBookingDeleteModal(selectedBookingIds)}
+            className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 bg-red-600 hover:bg-red-700 text-white"
+          >
+            Delete selected ({selectedBookingIds.size})
+          </Button>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="mb-4 flex flex-col sm:flex-row gap-2">
+        <input
+          type="date"
+          className="rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+          value={bookingsDateFilter}
+          onChange={(e) => setBookingsDateFilter(e.target.value)}
+          title="Filter by date"
+        />
+        <select
+          className="rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+          value={bookingsAmenityFilter}
+          onChange={(e) => setBookingsAmenityFilter(e.target.value)}
+        >
+          <option value="">All amenities</option>
+          {[...new Set(adminBookings.map((b) => b.amenityName))].sort((a, b) => a.localeCompare(b)).map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        <input
+          className="flex-1 rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
+          placeholder="Search by name, email, building, apartment…"
+          value={bookingsQuery}
+          onChange={(e) => setBookingsQuery(e.target.value)}
+        />
+        {(bookingsDateFilter || bookingsAmenityFilter || bookingsQuery) && (
+          <Button variant="secondary" className="text-xs sm:text-sm px-3 py-2" onClick={() => { setBookingsDateFilter(''); setBookingsAmenityFilter(''); setBookingsQuery(''); }}>
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {isLoadingBookings ? (
+        <TabLoadingSpinner message="Loading bookings…" />
+      ) : (
+        <div className="overflow-x-auto -mx-6 sm:mx-0">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 sm:py-3 w-8" />
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenity</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Building / Apt</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {adminBookings
+                .filter((b) => !bookingsDateFilter || b.date === bookingsDateFilter)
+                .filter((b) => !bookingsAmenityFilter || b.amenityName === bookingsAmenityFilter)
+                .filter((b) => {
+                  const q = bookingsQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    b.userName.toLowerCase().includes(q) ||
+                    b.userEmail.toLowerCase().includes(q) ||
+                    b.userBuilding.toLowerCase().includes(q) ||
+                    b.userApartmentNumber.toLowerCase().includes(q) ||
+                    b.amenityName.toLowerCase().includes(q)
+                  );
+                })
+                .map((booking) => (
+                  <tr key={booking.id}>
+                    <td className="px-3 py-3 sm:py-4 w-8">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        checked={selectedBookingIds.has(booking.id)}
+                        onChange={(e) => toggleBookingSelection(booking.id, e.target.checked)}
+                      />
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900">{booking.amenityName}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">{formatIsoDateToDmy(booking.date)}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">{booking.startTime} ({booking.slotLength} min)</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm font-medium text-gray-900">{booking.userName}</div>
+                      <div className="text-xs text-gray-500">{booking.userEmail}</div>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 hidden sm:table-cell">
+                      {booking.userBuilding} / {booking.userApartmentNumber}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <Button
+                        variant="secondary"
+                        onClick={() => openBookingDeleteModal(new Set([booking.id]))}
+                        title="Delete booking"
+                        className="text-red-600 hover:text-red-900 p-1 sm:p-2"
+                      >
+                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          {adminBookings.length === 0 && !isLoadingBookings && (
+            <p className="text-sm text-gray-500 text-center py-8">No upcoming bookings.</p>
+          )}
+        </div>
+      )}
+    </div>
+    );
+  };
+
+  const renderSettingsContent = () => (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+      </div>
+
+      {isLoadingCheckin ? (
+        <TabLoadingSpinner message="Loading settings..." />
+      ) : (
+        <div className="space-y-6">
+        <FeatureToggleCard
+          title="Check-In (QR Code Registration)"
+          description="When enabled, residents receive a check-in link before their booking and must scan the QR code posted at the amenity to confirm attendance. When disabled, no check-in emails are sent and QR codes will not be accepted."
+          isEnabled={checkinEnabled}
+          isToggling={isTogglingCheckin}
+          enableLabel="Enable Check-In"
+          disableLabel="Disable Check-In"
+          onEnable={() => toggleCheckin(true)}
+          onDisable={() => toggleCheckin(false)}
+        >
+          {checkinNewQrCount !== null && checkinEnabled && (
+            <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+              {getCheckinQrMessage(checkinNewQrCount)}
+            </div>
+          )}
+          {checkinNewQrCount !== null && !checkinEnabled && (
+            <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
+              Check-in disabled. Existing QR codes have been kept and can be re-enabled at any time.
+            </div>
+          )}
+        </FeatureToggleCard>
+
+        <FeatureToggleCard
+          title="Admin Approval Required"
+          description="When enabled, new users must be manually approved by an admin before they can make bookings. Admins receive an hourly email notification when users are waiting for approval."
+          isEnabled={approvalEnabled}
+          isToggling={isTogglingApproval}
+          enableLabel="Enable Approval Requirement"
+          disableLabel="Disable Approval Requirement"
+          onEnable={() => toggleApproval(true)}
+          onDisable={() => toggleApproval(false)}
+        >
+          {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount > 0 && (
+            <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+              Admin Approval disabled. {approvalAutoApprovedCount} pending {approvalAutoApprovedCount === 1 ? 'user was' : 'users were'} automatically approved.
+            </div>
+          )}
+          {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount === 0 && (
+            <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
+              Admin Approval disabled. No users were pending approval.
+            </div>
+          )}
+          {approvalEnabled && (
+            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+              Note: Disabling this setting will automatically approve all currently pending users.
+            </div>
+          )}
+        </FeatureToggleCard>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderSmtpContent = () => (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900">SMTP</h2>
+      </div>
+
+      {isLoadingSettings ? (
+        <TabLoadingSpinner message="Loading settings..." />
+      ) : (
+        <Card>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">SMTP / Email</h3>
+          <p className="text-sm text-gray-600 mb-6">Configure the outgoing mail server. Leave the password blank to keep the current password.</p>
+          <div className="space-y-4 max-w-lg">
+            <div>
+              <label htmlFor="smtp-host" className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+              <input
+                id="smtp-host"
+                type="text"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="smtp.gmail.com"
+                value={smtpSettings.smtp_host}
+                onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_host: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="smtp-port" className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
+              <input
+                id="smtp-port"
+                type="number"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="587"
+                value={smtpSettings.smtp_port}
+                onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_port: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="smtp-user" className="block text-sm font-medium text-gray-700 mb-1">SMTP Username</label>
+              <input
+                id="smtp-user"
+                type="text"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="user@example.com"
+                value={smtpSettings.smtp_user}
+                onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_user: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="smtp-pass" className="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
+              <input
+                id="smtp-pass"
+                type="password"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder={smtpSettings.smtp_pass_set ? '••••••••  (password set — enter new to change)' : 'Enter password'}
+                value={smtpPass}
+                onChange={(e) => setSmtpPass(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <div>
+              <label htmlFor="smtp-from" className="block text-sm font-medium text-gray-700 mb-1">From Address</label>
+              <input
+                id="smtp-from"
+                type="email"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="noreply@example.com"
+                value={smtpSettings.smtp_from}
+                onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_from: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
+              <Button
+                variant="secondary"
+                disabled={isTestingSmtp}
+                onClick={async () => {
+                  setIsTestingSmtp(true);
+                  try {
+                    const { data } = await api.post('/admin/settings/smtp/test');
+                    if (data.ok) {
+                      setNotification({ type: 'success', message: 'Test email sent — check your inbox.' });
+                    } else {
+                      setNotification({ type: 'error', message: `SMTP error: ${data.error || 'Unknown error'}` });
+                    }
+                  } catch (e: any) {
+                    setNotification({ type: 'error', message: e.response?.data?.message || 'Test request failed' });
+                  } finally {
+                    setIsTestingSmtp(false);
+                  }
+                }}
+              >
+                {isTestingSmtp ? 'Sending…' : 'Send test email'}
+              </Button>
+              <Button onClick={saveSmtpSettings} disabled={isSavingSettings}>
+                {isSavingSettings ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderLogsContent = () => (
+    <div>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Activity Logs</h2>
+
+        {/* Filter bar */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label htmlFor="log-filter-action" className="block text-xs font-medium text-gray-600 mb-1">Event type</label>
+              <select
+                id="log-filter-action"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm bg-white"
+                value={logsDraftFilters.action || ''}
+                onChange={(e) => setLogsDraftFilters((s) => ({ ...s, action: e.target.value || undefined }))}
+              >
+                <option value="">All events</option>
+                <option value="login">Login</option>
+                <option value="create">Booking created</option>
+                <option value="delete">Booking cancelled</option>
+                <option value="reminder_sent">Reminder sent</option>
+                <option value="reminder_failed">Reminder failed</option>
+                <option value="checkin_email_sent">Check-in email sent</option>
+                <option value="checkin_email_failed">Check-in email failed</option>
+                <option value="confirmation_failed">Confirmation email failed</option>
+                <option value="checked_in">Checked in</option>
+                <option value="no_show">No-shows (missed check-in)</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="log-filter-email" className="block text-xs font-medium text-gray-600 mb-1">User (email)</label>
+              <input
+                id="log-filter-email"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                placeholder="Filter by email..."
+                value={logsDraftFilters.userEmail || ''}
+                onChange={(e) => setLogsDraftFilters((s) => ({ ...s, userEmail: e.target.value || undefined }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyLogsFilters(); }}
+              />
+            </div>
+            <div>
+              <label htmlFor="log-filter-amenity" className="block text-xs font-medium text-gray-600 mb-1">Amenity</label>
+              <input
+                id="log-filter-amenity"
+                className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                placeholder="Filter by amenity..."
+                value={logsDraftFilters.amenityName || ''}
+                onChange={(e) => setLogsDraftFilters((s) => ({ ...s, amenityName: e.target.value || undefined }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyLogsFilters(); }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="log-filter-from" className="block text-xs font-medium text-gray-600 mb-1">From</label>
+                <input
+                  id="log-filter-from"
+                  type="date"
+                  className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                  value={logsDraftFilters.dateFrom || ''}
+                  onChange={(e) => setLogsDraftFilters((s) => ({ ...s, dateFrom: e.target.value || undefined }))}
+                />
+              </div>
+              <div>
+                <label htmlFor="log-filter-to" className="block text-xs font-medium text-gray-600 mb-1">To</label>
+                <input
+                  id="log-filter-to"
+                  type="date"
+                  className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                  value={logsDraftFilters.dateTo || ''}
+                  onChange={(e) => setLogsDraftFilters((s) => ({ ...s, dateTo: e.target.value || undefined }))}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={clearLogsFilters}>Clear</Button>
+            <Button onClick={applyLogsFilters}>Apply filters</Button>
+          </div>
+        </div>
+
+        {/* Active filter pills */}
+        {Object.values(logsFilters).some(Boolean) && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {logsFilters.action && (
+              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                Type: {logsFilters.action}
+                <button onClick={() => { const f = { ...logsFilters, action: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {logsFilters.userEmail && (
+              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                User: {logsFilters.userEmail}
+                <button onClick={() => { const f = { ...logsFilters, userEmail: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {logsFilters.amenityName && (
+              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                Amenity: {logsFilters.amenityName}
+                <button onClick={() => { const f = { ...logsFilters, amenityName: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+            {(logsFilters.dateFrom || logsFilters.dateTo) && (
+              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                Date: {logsFilters.dateFrom || '…'} – {logsFilters.dateTo || '…'}
+                <button onClick={() => { const f = { ...logsFilters, dateFrom: undefined, dateTo: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {[
+                { key: 'createdAt', label: 'Time' },
+                { key: 'action', label: 'Event' },
+                { key: 'userName', label: 'User' },
+                { key: null, label: 'IP address' },
+                { key: 'amenityName', label: 'Amenity' },
+                { key: 'date', label: 'Booking date' },
+                { key: 'startTime', label: 'Slot' },
+              ].map((col) => (
+                <th
+                  key={col.key ?? col.label}
+                  className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide ${col.key ? 'cursor-pointer hover:text-gray-700' : ''}`}
+                  onClick={() => {
+                    if (!col.key) return;
+                    const nextSortDir = logsSortBy === col.key && logsSortDir === 'ASC' ? 'DESC' : 'ASC';
+                    setLogsSortBy(col.key);
+                    setLogsSortDir(nextSortDir);
+                    setLogsPage(1);
+                    fetchLogs({ sortBy: col.key, sortDir: nextSortDir, page: 1 });
+                  }}
+                >
+                  {col.label}
+                  {col.key && logsSortBy === col.key && (
+                    <span className="ml-1">{logsSortDir === 'ASC' ? '↑' : '↓'}</span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {logs.map((l) => {
+              const isLogin = l.action === 'login';
+              const isCreate = l.action === 'create';
+              const isDelete = l.action === 'delete';
+              return (
+                <tr key={l.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{formatDateTimeDmy(l.createdAt)}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    {isLogin && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">Login</span>}
+                    {isCreate && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">Booked</span>}
+                    {isDelete && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Cancelled</span>}
+                    {l.action === 'reminder_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">Reminder sent</span>}
+                    {l.action === 'reminder_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Reminder failed</span>}
+                    {l.action === 'checkin_email_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-cyan-100 text-cyan-800">Check-in email</span>}
+                    {l.action === 'checkin_email_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Check-in email failed</span>}
+                    {l.action === 'confirmation_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Confirmation failed</span>}
+                    {l.action === 'checked_in' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">Checked in</span>}
+                    {l.action === 'no_show' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">No-show</span>}
+                  </td>
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    <button
+                      className="text-left hover:underline text-gray-900 font-medium"
+                      title={`Filter by ${l.userEmail}`}
+                      onClick={() => filterByUser(l.userEmail)}
+                    >
+                      {l.userName}
+                    </button>
+                    <div className="text-xs text-gray-500">{l.building}{l.apartmentNumber ? ` / ${l.apartmentNumber}` : ''}</div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-500 whitespace-nowrap font-mono text-xs">{l.ipAddress || '—'}</td>
+                  <td className="px-4 py-2 text-gray-700">{l.amenityName || '—'}</td>
+                  <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{l.date ? formatIsoDateToDmy(l.date) : '—'}</td>
+                  <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{l.startTime ? `${l.startTime} (${l.slotLength} min)` : '—'}</td>
+                </tr>
+              );
+            })}
+            {logs.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No log entries found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-4">
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-600">
+            {logsTotal} {logsTotal === 1 ? 'entry' : 'entries'} — page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsPageSize))}
+          </span>
+          <div className="flex space-x-2">
+            <Button variant="secondary" onClick={() => { if (logsPage > 1) { const p = logsPage - 1; setLogsPage(p); fetchLogs({ page: p }); }}}>Prev</Button>
+            <Button variant="secondary" onClick={() => { const max = Math.max(1, Math.ceil(logsTotal / logsPageSize)); if (logsPage < max) { const p = logsPage + 1; setLogsPage(p); fetchLogs({ page: p }); }}}>Next</Button>
+          </div>
+        </div>
+        <Button variant="secondary" onClick={async () => {
+          try {
+            const params = new URLSearchParams({ sortBy: logsSortBy, sortDir: logsSortDir });
+            if (logsFilters.action) params.set('action', logsFilters.action);
+            if (logsFilters.userEmail) params.set('userEmail', logsFilters.userEmail);
+            if (logsFilters.amenityName) params.set('amenityName', logsFilters.amenityName);
+            if (logsFilters.dateFrom) params.set('dateFrom', logsFilters.dateFrom);
+            if (logsFilters.dateTo) params.set('dateTo', logsFilters.dateTo);
+            const res = await fetch(`${API_BASE_URL}/bookings/logs/export?${params.toString()}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+            });
+            if (!res.ok) throw new Error('Failed to export CSV');
+            const text = await res.text();
+            const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const dlUrl = URL.createObjectURL(blob);
+            link.href = dlUrl;
+            link.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(dlUrl);
+          } catch (e: any) {
+            setNotification({ type: 'error', message: e.message || 'Failed to export CSV' });
+          }
+        }}>
+          Export CSV
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       {notification && (
@@ -1151,7 +1869,7 @@ export const AdminDashboard: React.FC = () => {
           onClose={() => setEmailActionModal(null)}
           onConfirm={confirmEmailAction}
           isSubmitting={emailActionModal.isSubmitting}
-          confirmLabel={emailActionModal.isSubmitting ? 'Please wait…' : emailActionModal.mode === 'revoke' ? 'Revoke access & send email' : 'Delete account & send email'}
+          confirmLabel={getEmailActionConfirmLabel(emailActionModal.mode, emailActionModal.isSubmitting)}
           confirmClassName={emailActionModal.mode === 'delete' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
         />
       )}
@@ -1168,7 +1886,7 @@ export const AdminDashboard: React.FC = () => {
           onClose={() => setBookingDeleteModal(null)}
           onConfirm={confirmBookingDelete}
           isSubmitting={bookingDeleteModal.isSubmitting}
-          confirmLabel={bookingDeleteModal.isSubmitting ? 'Deleting…' : `Delete & send email${selectedBookingIds.size > 1 ? 's' : ''}`}
+          confirmLabel={getBookingDeleteConfirmLabel(bookingDeleteModal.isSubmitting, selectedBookingIds.size)}
           confirmClassName="bg-red-600 hover:bg-red-700 text-white"
         />
       )}
@@ -1287,308 +2005,10 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           {/* Users tab */}
-          {activeTab === 'users' && (
-            <div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">All Users</h2>
-                <div className="flex items-center flex-wrap gap-2">
-                  <span className="text-xs sm:text-sm text-gray-600">{users.length} users</span>
-                  <Button
-                    variant="secondary"
-                    onClick={() => { setPendingApprovalFilter((f) => !f); setSelectedUserIds(new Set()); }}
-                    className={`text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 ${pendingApprovalFilter ? 'ring-2 ring-amber-400 border-amber-400' : ''}`}
-                  >
-                    {pendingApprovalFilter ? 'Show all' : 'Pending approval'}
-                  </Button>
-                  {selectedUserIds.size > 0 && (
-                    <Button onClick={bulkApproveSelected} disabled={isBulkApproving} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">
-                      {isBulkApproving ? 'Approving…' : `Approve selected (${selectedUserIds.size})`}
-                    </Button>
-                  )}
-                  {isAdmin && (
-                    <Button variant="secondary" onClick={() => setCreateSuperOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Super User</Button>
-                  )}
-                  {(isAdmin || isSuper) && (
-                    <Button variant="secondary" onClick={() => setCreateSecurityOpen(true)} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3">Create Security User</Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Role reference */}
-              <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors"
-                  onClick={() => setRoleInfoOpen((s) => !s)}
-                >
-                  <span>User roles</span>
-                  <span className="text-gray-400 text-xs">{roleInfoOpen ? '▲ hide' : '▼ show'}</span>
-                </button>
-                {roleInfoOpen && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-200 border-t border-gray-200">
-                    {[
-                      { role: 'user', label: 'User', description: 'Regular resident. Can create and cancel their own bookings within the configured restrictions.' },
-                      { role: 'super', label: 'Super', description: 'Trusted staff. Full read and manage access — buildings, amenities, logs, settings — but cannot create or promote user accounts.' },
-                      { role: 'admin', label: 'Admin', description: 'Full access. Can create and manage all user accounts, assign roles, and configure every part of the system.' },
-                      { role: 'security', label: 'Security', description: 'Read-only view of the security dashboard. Can see the current and next booking for every amenity with full resident details. Cannot make bookings.' },
-                    ].map(({ role, label, description }) => (
-                      <div key={label} className="px-4 py-3 space-y-1.5">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[role] ?? 'bg-gray-100 text-gray-800'}`}>{label}</span>
-                        <p className="text-xs text-gray-600 leading-relaxed">{description}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="mb-4">
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <input
-                    className="w-full rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
-                    placeholder="Search users..."
-                    value={usersQuery}
-                    onChange={(e) => setUsersQuery(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setUsersQuery((s) => s.trim()); }}
-                  />
-                  <Button variant="secondary" onClick={() => setUsersQuery((s) => s.trim())} className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 w-full sm:w-auto">Search</Button>
-                </div>
-              </div>
-
-              {isLoading ? (
-                <TabLoadingSpinner message="Loading users..." />
-              ) : (
-                <div className="overflow-x-auto -mx-6 sm:mx-0">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        {pendingApprovalFilter && <th className="px-3 py-2 sm:py-3 w-8" />}
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => { const key = 'name'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>User</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell" onClick={() => { const key = 'building'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Building</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => { const key = 'isEmailVerified'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Status</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden md:table-cell" onClick={() => { const key = 'role'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Role</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hidden sm:table-cell" onClick={() => { const key = 'createdAt'; const dir = usersSortBy === key && usersSortDir === 'ASC' ? 'DESC' : 'ASC'; setUsersSortBy(key); setUsersSortDir(dir); }}>Created</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {users
-                        .filter((u) => userMatchesQuery(u, usersQuery.trim().toLowerCase()))
-                        .filter((u) => !pendingApprovalFilter || (u.isEmailVerified && !u.isApproved))
-                        .sort((a, b) => (usersSortDir === 'ASC' ? 1 : -1) * compareUsersBy(a, b, usersSortBy))
-                        .map((user) => (
-                          <tr key={user.id}>
-                            {pendingApprovalFilter && (
-                              <td className="px-3 py-3 sm:py-4 w-8">
-                                {user.isEmailVerified && !user.isApproved && (
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-gray-300"
-                                    checked={selectedUserIds.has(user.id)}
-                                    onChange={(e) => {
-                                      setSelectedUserIds((prev) => {
-                                        const next = new Set(prev);
-                                        if (e.target.checked) next.add(user.id); else next.delete(user.id);
-                                        return next;
-                                      });
-                                    }}
-                                  />
-                                )}
-                              </td>
-                            )}
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                              <div className="text-xs sm:text-sm font-medium text-gray-900">{user.name}</div>
-                              {user.role !== 'security' && <div className="text-xs sm:text-sm text-gray-500">{user.email}</div>}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden sm:table-cell">
-                              {user.role === 'security' ? (
-                                <div className="text-xs sm:text-sm text-gray-400">—</div>
-                              ) : (
-                                <>
-                                  <div className="text-xs sm:text-sm text-gray-900">{user.building}</div>
-                                  <div className="text-xs sm:text-sm text-gray-500">Apt {user.apartmentNumber}</div>
-                                </>
-                              )}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                              {user.isEmailVerified && !user.isApproved ? (
-                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">Pending Approval</span>
-                              ) : (
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                  {user.isEmailVerified ? 'Verified' : 'Pending'}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden md:table-cell">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${ROLE_BADGE_CLASSES[user.role] ?? 'bg-blue-100 text-blue-800'}`}>
-                                {user.role}
-                              </span>
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 hidden sm:table-cell">
-                              {formatDateTimeDmy(user.createdAt).split(' ')[0]}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
-                              <div className="flex space-x-1 sm:space-x-2">
-                                {user.isEmailVerified && !user.isApproved && (
-                                  <>
-                                    <Button onClick={() => approveUser(user.id)} disabled={approvingUserId === user.id} className="text-xs px-2 py-1">
-                                      {approvingUserId === user.id ? '…' : 'Approve'}
-                                    </Button>
-                                    <Button variant="secondary" onClick={() => rejectUser(user.id)} disabled={rejectingUserId === user.id} className="text-xs px-2 py-1 text-red-600 hover:text-red-900 border-red-300">
-                                      {rejectingUserId === user.id ? '…' : 'Reject'}
-                                    </Button>
-                                  </>
-                                )}
-                                {!user.isEmailVerified && (
-                                  <Button variant="secondary" onClick={() => resendVerificationEmail(user.id)} disabled={resendingEmail === user.id} title="Resend verification email" className="text-blue-600 hover:text-blue-900 p-1 sm:p-2">
-                                    <Mail className={`h-3 w-3 sm:h-4 sm:w-4 ${resendingEmail === user.id ? 'animate-pulse' : ''}`} />
-                                  </Button>
-                                )}
-                                {user.isApproved && user.isEmailVerified && user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
-                                  <Button variant="secondary" onClick={() => openEmailActionModal(user, 'revoke')} title="Revoke booking access" className="text-xs px-2 py-1 text-amber-600 hover:text-amber-900 border-amber-300">
-                                    Revoke
-                                  </Button>
-                                )}
-                                {user.isApproved !== false && user.role !== 'admin' && user.role !== 'super' && user.role !== 'security' && (
-                                  <Button variant="secondary" onClick={() => openEmailActionModal(user, 'delete')} title="Delete user account" className="text-red-600 hover:text-red-900 p-1 sm:p-2">
-                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                )}
-                                {currentUser?.role === 'admin' && user.role !== 'admin' && user.isApproved !== false && renderRoleButton(user)}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === 'users' && renderUsersContent()}
 
           {/* Bookings tab */}
-          {activeTab === 'bookings' && (
-            <div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Upcoming Bookings</h2>
-                {selectedBookingIds.size > 0 && (
-                  <Button
-                    onClick={() => openBookingDeleteModal(selectedBookingIds)}
-                    className="text-xs sm:text-sm px-3 sm:px-6 py-2 sm:py-3 bg-red-600 hover:bg-red-700 text-white"
-                  >
-                    Delete selected ({selectedBookingIds.size})
-                  </Button>
-                )}
-              </div>
-
-              {/* Filters */}
-              <div className="mb-4 flex flex-col sm:flex-row gap-2">
-                <input
-                  type="date"
-                  className="rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
-                  value={bookingsDateFilter}
-                  onChange={(e) => setBookingsDateFilter(e.target.value)}
-                  title="Filter by date"
-                />
-                <select
-                  className="rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
-                  value={bookingsAmenityFilter}
-                  onChange={(e) => setBookingsAmenityFilter(e.target.value)}
-                >
-                  <option value="">All amenities</option>
-                  {[...new Set(adminBookings.map((b) => b.amenityName))].sort().map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-                <input
-                  className="flex-1 rounded-md border border-gray-300 py-2 px-3 text-xs sm:text-sm"
-                  placeholder="Search by name, email, building, apartment…"
-                  value={bookingsQuery}
-                  onChange={(e) => setBookingsQuery(e.target.value)}
-                />
-                {(bookingsDateFilter || bookingsAmenityFilter || bookingsQuery) && (
-                  <Button variant="secondary" className="text-xs sm:text-sm px-3 py-2" onClick={() => { setBookingsDateFilter(''); setBookingsAmenityFilter(''); setBookingsQuery(''); }}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-
-              {isLoadingBookings ? (
-                <TabLoadingSpinner message="Loading bookings…" />
-              ) : (
-                <div className="overflow-x-auto -mx-6 sm:mx-0">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 sm:py-3 w-8" />
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amenity</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Building / Apt</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {adminBookings
-                        .filter((b) => !bookingsDateFilter || b.date === bookingsDateFilter)
-                        .filter((b) => !bookingsAmenityFilter || b.amenityName === bookingsAmenityFilter)
-                        .filter((b) => {
-                          const q = bookingsQuery.trim().toLowerCase();
-                          if (!q) return true;
-                          return (
-                            b.userName.toLowerCase().includes(q) ||
-                            b.userEmail.toLowerCase().includes(q) ||
-                            b.userBuilding.toLowerCase().includes(q) ||
-                            b.userApartmentNumber.toLowerCase().includes(q) ||
-                            b.amenityName.toLowerCase().includes(q)
-                          );
-                        })
-                        .map((booking) => (
-                          <tr key={booking.id}>
-                            <td className="px-3 py-3 sm:py-4 w-8">
-                              <input
-                                type="checkbox"
-                                className="rounded border-gray-300"
-                                checked={selectedBookingIds.has(booking.id)}
-                                onChange={(e) => {
-                                  setSelectedBookingIds((prev) => {
-                                    const next = new Set(prev);
-                                    if (e.target.checked) next.add(booking.id); else next.delete(booking.id);
-                                    return next;
-                                  });
-                                }}
-                              />
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900">{booking.amenityName}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">{formatIsoDateToDmy(booking.date)}</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">{booking.startTime} ({booking.slotLength} min)</td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                              <div className="text-xs sm:text-sm font-medium text-gray-900">{booking.userName}</div>
-                              <div className="text-xs text-gray-500">{booking.userEmail}</div>
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 hidden sm:table-cell">
-                              {booking.userBuilding} / {booking.userApartmentNumber}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                              <Button
-                                variant="secondary"
-                                onClick={() => openBookingDeleteModal(new Set([booking.id]))}
-                                title="Delete booking"
-                                className="text-red-600 hover:text-red-900 p-1 sm:p-2"
-                              >
-                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                  {adminBookings.length === 0 && !isLoadingBookings && (
-                    <p className="text-sm text-gray-500 text-center py-8">No upcoming bookings.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === 'bookings' && renderBookingsContent()}
 
           {/* Buildings and Units tab */}
           {activeTab === 'buildings' && (
@@ -1655,405 +2075,13 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* Settings tab */}
-          {activeTab === 'settings' && (isAdmin || isSuper) && (
-            <div>
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
-              </div>
-
-              {isLoadingCheckin ? (
-                <TabLoadingSpinner message="Loading settings..." />
-              ) : (
-                <div className="space-y-6">
-                <FeatureToggleCard
-                  title="Check-In (QR Code Registration)"
-                  description="When enabled, residents receive a check-in link before their booking and must scan the QR code posted at the amenity to confirm attendance. When disabled, no check-in emails are sent and QR codes will not be accepted."
-                  isEnabled={checkinEnabled}
-                  isToggling={isTogglingCheckin}
-                  enableLabel="Enable Check-In"
-                  disableLabel="Disable Check-In"
-                  onEnable={() => toggleCheckin(true)}
-                  onDisable={() => toggleCheckin(false)}
-                >
-                  {checkinNewQrCount !== null && checkinEnabled && (
-                    <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
-                      {checkinNewQrCount > 0
-                        ? `Check-in enabled. QR codes were generated for ${checkinNewQrCount} ${checkinNewQrCount === 1 ? 'amenity' : 'amenities'} that did not have one. Go to Amenities to download and print them.`
-                        : 'Check-in enabled. All amenities already had QR codes — no changes needed.'}
-                    </div>
-                  )}
-                  {checkinNewQrCount !== null && !checkinEnabled && (
-                    <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
-                      Check-in disabled. Existing QR codes have been kept and can be re-enabled at any time.
-                    </div>
-                  )}
-                </FeatureToggleCard>
-
-                <FeatureToggleCard
-                  title="Admin Approval Required"
-                  description="When enabled, new users must be manually approved by an admin before they can make bookings. Admins receive an hourly email notification when users are waiting for approval."
-                  isEnabled={approvalEnabled}
-                  isToggling={isTogglingApproval}
-                  enableLabel="Enable Approval Requirement"
-                  disableLabel="Disable Approval Requirement"
-                  onEnable={() => toggleApproval(true)}
-                  onDisable={() => toggleApproval(false)}
-                >
-                  {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount > 0 && (
-                    <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
-                      Admin Approval disabled. {approvalAutoApprovedCount} pending {approvalAutoApprovedCount === 1 ? 'user was' : 'users were'} automatically approved.
-                    </div>
-                  )}
-                  {approvalAutoApprovedCount !== null && !approvalEnabled && approvalAutoApprovedCount === 0 && (
-                    <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-600">
-                      Admin Approval disabled. No users were pending approval.
-                    </div>
-                  )}
-                  {approvalEnabled && (
-                    <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                      Note: Disabling this setting will automatically approve all currently pending users.
-                    </div>
-                  )}
-                </FeatureToggleCard>
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === 'settings' && (isAdmin || isSuper) && renderSettingsContent()}
 
           {/* SMTP tab */}
-          {activeTab === 'smtp' && isAdmin && (
-            <div>
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">SMTP</h2>
-              </div>
-
-              {isLoadingSettings ? (
-                <TabLoadingSpinner message="Loading settings..." />
-              ) : (
-                <Card>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">SMTP / Email</h3>
-                  <p className="text-sm text-gray-600 mb-6">Configure the outgoing mail server. Leave the password blank to keep the current password.</p>
-                  <div className="space-y-4 max-w-lg">
-                    <div>
-                      <label htmlFor="smtp-host" className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
-                      <input
-                        id="smtp-host"
-                        type="text"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="smtp.gmail.com"
-                        value={smtpSettings.smtp_host}
-                        onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_host: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="smtp-port" className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
-                      <input
-                        id="smtp-port"
-                        type="number"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="587"
-                        value={smtpSettings.smtp_port}
-                        onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_port: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="smtp-user" className="block text-sm font-medium text-gray-700 mb-1">SMTP Username</label>
-                      <input
-                        id="smtp-user"
-                        type="text"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="user@example.com"
-                        value={smtpSettings.smtp_user}
-                        onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_user: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="smtp-pass" className="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
-                      <input
-                        id="smtp-pass"
-                        type="password"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder={smtpSettings.smtp_pass_set ? '••••••••  (password set — enter new to change)' : 'Enter password'}
-                        value={smtpPass}
-                        onChange={(e) => setSmtpPass(e.target.value)}
-                        autoComplete="new-password"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="smtp-from" className="block text-sm font-medium text-gray-700 mb-1">From Address</label>
-                      <input
-                        id="smtp-from"
-                        type="email"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="noreply@example.com"
-                        value={smtpSettings.smtp_from}
-                        onChange={(e) => setSmtpSettings((s) => ({ ...s, smtp_from: e.target.value }))}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between pt-2 gap-3 flex-wrap">
-                      <Button
-                        variant="secondary"
-                        disabled={isTestingSmtp}
-                        onClick={async () => {
-                          setIsTestingSmtp(true);
-                          try {
-                            const { data } = await api.post('/admin/settings/smtp/test');
-                            if (data.ok) {
-                              setNotification({ type: 'success', message: 'Test email sent — check your inbox.' });
-                            } else {
-                              setNotification({ type: 'error', message: `SMTP error: ${data.error || 'Unknown error'}` });
-                            }
-                          } catch (e: any) {
-                            setNotification({ type: 'error', message: e.response?.data?.message || 'Test request failed' });
-                          } finally {
-                            setIsTestingSmtp(false);
-                          }
-                        }}
-                      >
-                        {isTestingSmtp ? 'Sending…' : 'Send test email'}
-                      </Button>
-                      <Button onClick={saveSmtpSettings} disabled={isSavingSettings}>
-                        {isSavingSettings ? 'Saving...' : 'Save Settings'}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              )}
-            </div>
-          )}
+          {activeTab === 'smtp' && isAdmin && renderSmtpContent()}
 
           {/* Logs tab */}
-          {activeTab === 'logs' && (
-            <div>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Activity Logs</h2>
-
-                {/* Filter bar */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div>
-                      <label htmlFor="log-filter-action" className="block text-xs font-medium text-gray-600 mb-1">Event type</label>
-                      <select
-                        id="log-filter-action"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm bg-white"
-                        value={logsDraftFilters.action || ''}
-                        onChange={(e) => setLogsDraftFilters((s) => ({ ...s, action: e.target.value || undefined }))}
-                      >
-                        <option value="">All events</option>
-                        <option value="login">Login</option>
-                        <option value="create">Booking created</option>
-                        <option value="delete">Booking cancelled</option>
-                        <option value="reminder_sent">Reminder sent</option>
-                        <option value="reminder_failed">Reminder failed</option>
-                        <option value="checkin_email_sent">Check-in email sent</option>
-                        <option value="checkin_email_failed">Check-in email failed</option>
-                        <option value="confirmation_failed">Confirmation email failed</option>
-                        <option value="checked_in">Checked in</option>
-                        <option value="no_show">No-shows (missed check-in)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="log-filter-email" className="block text-xs font-medium text-gray-600 mb-1">User (email)</label>
-                      <input
-                        id="log-filter-email"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                        placeholder="Filter by email..."
-                        value={logsDraftFilters.userEmail || ''}
-                        onChange={(e) => setLogsDraftFilters((s) => ({ ...s, userEmail: e.target.value || undefined }))}
-                        onKeyDown={(e) => { if (e.key === 'Enter') applyLogsFilters(); }}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="log-filter-amenity" className="block text-xs font-medium text-gray-600 mb-1">Amenity</label>
-                      <input
-                        id="log-filter-amenity"
-                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                        placeholder="Filter by amenity..."
-                        value={logsDraftFilters.amenityName || ''}
-                        onChange={(e) => setLogsDraftFilters((s) => ({ ...s, amenityName: e.target.value || undefined }))}
-                        onKeyDown={(e) => { if (e.key === 'Enter') applyLogsFilters(); }}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label htmlFor="log-filter-from" className="block text-xs font-medium text-gray-600 mb-1">From</label>
-                        <input
-                          id="log-filter-from"
-                          type="date"
-                          className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                          value={logsDraftFilters.dateFrom || ''}
-                          onChange={(e) => setLogsDraftFilters((s) => ({ ...s, dateFrom: e.target.value || undefined }))}
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="log-filter-to" className="block text-xs font-medium text-gray-600 mb-1">To</label>
-                        <input
-                          id="log-filter-to"
-                          type="date"
-                          className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
-                          value={logsDraftFilters.dateTo || ''}
-                          onChange={(e) => setLogsDraftFilters((s) => ({ ...s, dateTo: e.target.value || undefined }))}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="secondary" onClick={clearLogsFilters}>Clear</Button>
-                    <Button onClick={applyLogsFilters}>Apply filters</Button>
-                  </div>
-                </div>
-
-                {/* Active filter pills */}
-                {Object.values(logsFilters).some(Boolean) && (
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {logsFilters.action && (
-                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                        Type: {logsFilters.action}
-                        <button onClick={() => { const f = { ...logsFilters, action: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
-                      </span>
-                    )}
-                    {logsFilters.userEmail && (
-                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                        User: {logsFilters.userEmail}
-                        <button onClick={() => { const f = { ...logsFilters, userEmail: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
-                      </span>
-                    )}
-                    {logsFilters.amenityName && (
-                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                        Amenity: {logsFilters.amenityName}
-                        <button onClick={() => { const f = { ...logsFilters, amenityName: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
-                      </span>
-                    )}
-                    {(logsFilters.dateFrom || logsFilters.dateTo) && (
-                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                        Date: {logsFilters.dateFrom || '…'} – {logsFilters.dateTo || '…'}
-                        <button onClick={() => { const f = { ...logsFilters, dateFrom: undefined, dateTo: undefined }; setLogsFilters(f); setLogsDraftFilters(f); fetchLogs({ page: 1, filters: f }); }} className="ml-1 hover:text-blue-600"><X className="h-3 w-3" /></button>
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {[
-                        { key: 'createdAt', label: 'Time' },
-                        { key: 'action', label: 'Event' },
-                        { key: 'userName', label: 'User' },
-                        { key: null, label: 'IP address' },
-                        { key: 'amenityName', label: 'Amenity' },
-                        { key: 'date', label: 'Booking date' },
-                        { key: 'startTime', label: 'Slot' },
-                      ].map((col) => (
-                        <th
-                          key={col.key ?? col.label}
-                          className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wide ${col.key ? 'cursor-pointer hover:text-gray-700' : ''}`}
-                          onClick={() => {
-                            if (!col.key) return;
-                            const nextSortDir = logsSortBy === col.key && logsSortDir === 'ASC' ? 'DESC' : 'ASC';
-                            setLogsSortBy(col.key);
-                            setLogsSortDir(nextSortDir);
-                            setLogsPage(1);
-                            fetchLogs({ sortBy: col.key, sortDir: nextSortDir, page: 1 });
-                          }}
-                        >
-                          {col.label}
-                          {col.key && logsSortBy === col.key && (
-                            <span className="ml-1">{logsSortDir === 'ASC' ? '↑' : '↓'}</span>
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {logs.map((l) => {
-                      const isLogin = l.action === 'login';
-                      const isCreate = l.action === 'create';
-                      const isDelete = l.action === 'delete';
-                      return (
-                        <tr key={l.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{formatDateTimeDmy(l.createdAt)}</td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {isLogin && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">Login</span>}
-                            {isCreate && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">Booked</span>}
-                            {isDelete && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Cancelled</span>}
-                            {l.action === 'reminder_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">Reminder sent</span>}
-                            {l.action === 'reminder_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Reminder failed</span>}
-                            {l.action === 'checkin_email_sent' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-cyan-100 text-cyan-800">Check-in email</span>}
-                            {l.action === 'checkin_email_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Check-in email failed</span>}
-                            {l.action === 'confirmation_failed' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">Confirmation failed</span>}
-                            {l.action === 'checked_in' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-teal-100 text-teal-800">Checked in</span>}
-                            {l.action === 'no_show' && <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">No-show</span>}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            <button
-                              className="text-left hover:underline text-gray-900 font-medium"
-                              title={`Filter by ${l.userEmail}`}
-                              onClick={() => filterByUser(l.userEmail)}
-                            >
-                              {l.userName}
-                            </button>
-                            <div className="text-xs text-gray-500">{l.building}{l.apartmentNumber ? ` / ${l.apartmentNumber}` : ''}</div>
-                          </td>
-                          <td className="px-4 py-2 text-gray-500 whitespace-nowrap font-mono text-xs">{l.ipAddress || '—'}</td>
-                          <td className="px-4 py-2 text-gray-700">{l.amenityName || '—'}</td>
-                          <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{l.date ? formatIsoDateToDmy(l.date) : '—'}</td>
-                          <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{l.startTime ? `${l.startTime} (${l.slotLength} min)` : '—'}</td>
-                        </tr>
-                      );
-                    })}
-                    {logs.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No log entries found.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600">
-                    {logsTotal} {logsTotal === 1 ? 'entry' : 'entries'} — page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsPageSize))}
-                  </span>
-                  <div className="flex space-x-2">
-                    <Button variant="secondary" onClick={() => { if (logsPage > 1) { const p = logsPage - 1; setLogsPage(p); fetchLogs({ page: p }); }}}>Prev</Button>
-                    <Button variant="secondary" onClick={() => { const max = Math.max(1, Math.ceil(logsTotal / logsPageSize)); if (logsPage < max) { const p = logsPage + 1; setLogsPage(p); fetchLogs({ page: p }); }}}>Next</Button>
-                  </div>
-                </div>
-                <Button variant="secondary" onClick={async () => {
-                  try {
-                    const params = new URLSearchParams({ sortBy: logsSortBy, sortDir: logsSortDir });
-                    if (logsFilters.action) params.set('action', logsFilters.action);
-                    if (logsFilters.userEmail) params.set('userEmail', logsFilters.userEmail);
-                    if (logsFilters.amenityName) params.set('amenityName', logsFilters.amenityName);
-                    if (logsFilters.dateFrom) params.set('dateFrom', logsFilters.dateFrom);
-                    if (logsFilters.dateTo) params.set('dateTo', logsFilters.dateTo);
-                    const res = await fetch(`${API_BASE_URL}/bookings/logs/export?${params.toString()}`, {
-                      headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-                    });
-                    if (!res.ok) throw new Error('Failed to export CSV');
-                    const text = await res.text();
-                    const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    const dlUrl = URL.createObjectURL(blob);
-                    link.href = dlUrl;
-                    link.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    URL.revokeObjectURL(dlUrl);
-                  } catch (e: any) {
-                    setNotification({ type: 'error', message: e.message || 'Failed to export CSV' });
-                  }
-                }}>
-                  Export CSV
-                </Button>
-              </div>
-            </div>
-          )}
+          {activeTab === 'logs' && renderLogsContent()}
         </Card>
       </div>
 

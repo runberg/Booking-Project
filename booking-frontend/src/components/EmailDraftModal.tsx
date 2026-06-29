@@ -49,8 +49,9 @@ export const EmailDraftModal: React.FC<EmailDraftModalProps> = ({
           <p className="text-sm text-gray-600">{description}</p>
           <p className="text-xs text-gray-400">{variablesHint}</p>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
+            <label htmlFor="email-draft-subject" className="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
             <input
+              id="email-draft-subject"
               type="text"
               className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
               value={subject}
@@ -58,8 +59,9 @@ export const EmailDraftModal: React.FC<EmailDraftModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Email body (HTML)</label>
+            <label htmlFor="email-draft-body" className="block text-xs font-medium text-gray-600 mb-1">Email body (HTML)</label>
             <textarea
+              id="email-draft-body"
               rows={8}
               className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm font-mono"
               value={body}
