@@ -436,14 +436,14 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const confirmBookingDelete = async () => {
+  const confirmBookingDelete = async (body: string) => {
     if (!bookingDeleteModal) return;
     setBookingDeleteModal((prev) => prev ? { ...prev, isSubmitting: true } : null);
     try {
       const { data } = await api.post('/admin/bookings/delete-bulk', {
         bookingIds: Array.from(selectedBookingIds),
         subject: bookingDeleteModal.subject,
-        emailBody: bookingDeleteModal.body,
+        emailBody: body,
       });
       setNotification({ type: 'success', message: `${data.deleted} booking(s) deleted` });
       setBookingDeleteModal(null);
@@ -487,7 +487,7 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const confirmEmailAction = async () => {
+  const confirmEmailAction = async (body: string) => {
     if (!emailActionModal) return;
     setEmailActionModal((prev) => prev ? { ...prev, isSubmitting: true } : null);
     const endpoint = emailActionModal.mode === 'revoke'
@@ -496,7 +496,7 @@ export const AdminDashboard: React.FC = () => {
         ? `/admin/users/${emailActionModal.userId}/reject`
         : `/admin/users/${emailActionModal.userId}/delete-account`;
     try {
-      await api.post(endpoint, { subject: emailActionModal.subject, emailBody: emailActionModal.body });
+      await api.post(endpoint, { subject: emailActionModal.subject, emailBody: body });
       const msg = emailActionModal.mode === 'revoke' ? 'User access revoked' : emailActionModal.mode === 'reject' ? 'User rejected' : 'User account deleted';
       setNotification({ type: 'success', message: msg });
       setEmailActionModal(null);
@@ -1863,8 +1863,12 @@ export const AdminDashboard: React.FC = () => {
           }
           subject={emailActionModal.subject}
           body={emailActionModal.body}
+          variables={
+            emailActionModal.mode === 'reject'
+              ? [{ tag: '{{name}}', label: 'Name' }]
+              : [{ tag: '{{name}}', label: 'Name' }, { tag: '{{email}}', label: 'Email' }]
+          }
           onSubjectChange={(v) => setEmailActionModal((prev) => prev ? { ...prev, subject: v } : null)}
-          onBodyChange={(v) => setEmailActionModal((prev) => prev ? { ...prev, body: v } : null)}
           onClose={() => setEmailActionModal(null)}
           onConfirm={confirmEmailAction}
           isSubmitting={emailActionModal.isSubmitting}
@@ -1880,8 +1884,13 @@ export const AdminDashboard: React.FC = () => {
           variablesHint={<>Variables <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{amenity}}'}</code>, <code className="bg-gray-100 px-1 rounded">{'{{date}}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{{time}}'}</code> will be replaced automatically per booking.</>}
           subject={bookingDeleteModal.subject}
           body={bookingDeleteModal.body}
+          variables={[
+            { tag: '{{name}}', label: 'Name' },
+            { tag: '{{amenity}}', label: 'Amenity' },
+            { tag: '{{date}}', label: 'Date' },
+            { tag: '{{time}}', label: 'Time' },
+          ]}
           onSubjectChange={(v) => setBookingDeleteModal((prev) => prev ? { ...prev, subject: v } : null)}
-          onBodyChange={(v) => setBookingDeleteModal((prev) => prev ? { ...prev, body: v } : null)}
           onClose={() => setBookingDeleteModal(null)}
           onConfirm={confirmBookingDelete}
           isSubmitting={bookingDeleteModal.isSubmitting}
