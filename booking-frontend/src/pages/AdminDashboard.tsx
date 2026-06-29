@@ -131,6 +131,42 @@ function applyPreviewVars(html: string): string {
   return html.replace(/\{\{(\w+)\}\}/g, (_, key: string) => PREVIEW_VARS[key] ?? `{{${key}}}`);
 }
 
+// Compact button pill spans (data-email-button) exist only in the editor DOM.
+// Before saving to the API or rendering a preview, expand them to full button+URL HTML.
+// The wrapper div's text-align (set by the admin via Left/Center) is preserved.
+function expandEmailButtons(html: string): string {
+  interface BtnCfg { color: string; label: string; href: string }
+  const configs: Record<string, BtnCfg> = {
+    verify:  { color: '#16a34a', label: 'Verify Email',    href: '{{verificationUrl}}' },
+    checkin: { color: '#2563eb', label: 'Check In',         href: '{{checkinUrl}}' },
+    cancel:  { color: '#dc3545', label: 'Cancel Booking',   href: '{{cancelUrl}}' },
+  };
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  doc.querySelectorAll('[data-email-button]').forEach((el) => {
+    const type = el.getAttribute('data-email-button') ?? '';
+    const cfg = configs[type];
+    if (!cfg) return;
+    const wrapper = el.parentElement;
+    const align = (wrapper as HTMLElement | null)?.style?.textAlign || 'center';
+    const fullHtml =
+      `<div style="text-align:${align}">` +
+      `<a href="${cfg.href}" style="background-color:${cfg.color};color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">${cfg.label}</a>` +
+      `<p style="font-size:13px;color:#666666">Or copy and paste this URL into your browser:<br>${cfg.href}</p>` +
+      `</div>`;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = fullHtml;
+    const target = wrapper?.tagName === 'DIV' ? wrapper : el;
+    target.replaceWith(tpl.content.cloneNode(true));
+  });
+  return doc.body.innerHTML;
+}
+
+// The editor wraps {{var}} pills in styled <span> tags for display only.
+// Strip those wrappers before rendering a preview so the text looks like a real email.
+function stripDecoratorSpans(html: string): string {
+  return html.replace(/<span\b[^>]*>/g, '').replace(/<\/span>/g, '');
+}
+
 function getCheckinQrMessage(qrCount: number): string {
   if (qrCount === 0) return 'Check-in enabled. All amenities already had QR codes — no changes needed.';
   const unit = qrCount === 1 ? 'amenity' : 'amenities';
@@ -884,14 +920,15 @@ export const AdminDashboard: React.FC = () => {
       setEmailTemplates((prev) => patchEmailTemplate(prev, { key: k, subject: val }));
     const openPreview = (key: string, subject: string) => {
       const raw = editorDomRefs.current[key]?.innerHTML ?? '';
-      const body = applyPreviewVars(raw);
+      const body = applyPreviewVars(stripDecoratorSpans(expandEmailButtons(raw)));
       const previewSubject = applyPreviewVars(subject || '(no subject)');
       const footerTpl = emailTemplates.find((x) => x.key === 'email_footer');
       const footerHtml = footerTpl?.body?.trim() ?? '';
       const footerBlock = footerHtml && key !== 'email_footer'
         ? `<hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px"><p style="font-size:12px;color:#999;text-align:center;font-style:italic">${applyPreviewVars(footerHtml)}</p>`
         : '';
-      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">${body}${footerBlock}</div>`;
+      const content = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">${body}${footerBlock}</div>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;background:white">${content}</body></html>`;
       setPreviewModal({ subject: previewSubject, html });
     };
     if (isLoadingEmails) {
@@ -993,7 +1030,6 @@ export const AdminDashboard: React.FC = () => {
             description: 'Sent to users after they register to verify their email address.',
             variables: [
               { tag: '{{name}}', desc: 'Full name of the user' },
-              { tag: '{{verificationUrl}}', desc: 'Email verification link' },
             ],
           },
           {
@@ -1016,7 +1052,6 @@ export const AdminDashboard: React.FC = () => {
               { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
               { tag: '{{date}}', desc: 'Booking date' },
               { tag: '{{time}}', desc: 'Booking start time' },
-              { tag: '{{cancelUrl}}', desc: 'One-click cancel link (no login required)' },
             ],
           },
           {
@@ -1028,7 +1063,6 @@ export const AdminDashboard: React.FC = () => {
               { tag: '{{amenity}}', desc: 'Name of the booked amenity' },
               { tag: '{{date}}', desc: 'Booking date' },
               { tag: '{{time}}', desc: 'Booking start time' },
-              { tag: '{{checkinUrl}}', desc: 'Link to open the QR check-in page' },
             ],
           },
           {
@@ -1149,7 +1183,7 @@ export const AdminDashboard: React.FC = () => {
                 <Button variant="secondary" onClick={() => openPreview(key, subject)}>Preview</Button>
                 <Button onClick={async () => {
                   try {
-                    const body = editorDomRefs.current[key]?.innerHTML ?? '';
+                    const body = expandEmailButtons(editorDomRefs.current[key]?.innerHTML ?? '');
                     await api.put(`/admin/email-templates/${key}`, { body, subject });
                     setNotification({ type: 'success', message: 'Template saved' });
                   } catch (e: any) {
