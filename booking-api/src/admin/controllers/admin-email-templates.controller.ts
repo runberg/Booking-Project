@@ -63,7 +63,11 @@ const ALLOWED_HTML: sanitizeHtml.IOptions = {
     div: { 'text-align': [/^(left|center|right)$/] },
     h1: { 'text-align': [/^(left|center|right)$/] },
     h2: { 'text-align': [/^(left|center|right)$/] },
-    p: { 'text-align': [/^(left|center|right)$/] },
+    p: {
+      'text-align': [/^(left|center|right)$/],
+      'font-size': [/^\d+(px|em|rem)$/],
+      color: [/^#[0-9a-fA-F]{3,6}$/],
+    },
     a: {
       'background-color': [/^#[0-9a-fA-F]{3,6}$/],
       color: [/^(white|black|#[0-9a-fA-F]{3,6})$/],

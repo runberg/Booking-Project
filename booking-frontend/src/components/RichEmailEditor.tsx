@@ -122,7 +122,7 @@ export const RichEmailEditor: React.FC<Props> = ({
             onMouseDown={(e) => {
               e.preventDefault();
               insertHTML(
-                '<div style="text-align:center"><a href="{{checkinUrl}}" style="background-color:#2563eb;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Check In</a></div>',
+                '<div style="text-align:center"><a href="{{checkinUrl}}" style="background-color:#2563eb;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Check In</a></div><p style="text-align:center;font-size:12px;color:#666666;">Or copy and paste this URL into your browser:<br>{{checkinUrl}}</p>',
               );
             }}
           >
@@ -137,7 +137,7 @@ export const RichEmailEditor: React.FC<Props> = ({
             onMouseDown={(e) => {
               e.preventDefault();
               insertHTML(
-                '<div style="text-align:center"><a href="{{verificationUrl}}" style="background-color:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Verify Email</a></div>',
+                '<div style="text-align:center"><a href="{{verificationUrl}}" style="background-color:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Verify Email</a></div><p style="text-align:center;font-size:12px;color:#666666;">Or copy and paste this URL into your browser:<br>{{verificationUrl}}</p>',
               );
             }}
           >
@@ -152,7 +152,7 @@ export const RichEmailEditor: React.FC<Props> = ({
             onMouseDown={(e) => {
               e.preventDefault();
               insertHTML(
-                '<div style="text-align:center;margin:20px 0"><a href="{{cancelUrl}}" style="background-color:#dc3545;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Cancel Booking</a></div>',
+                '<div style="text-align:center"><a href="{{cancelUrl}}" style="background-color:#dc3545;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Cancel Booking</a></div><p style="text-align:center;font-size:12px;color:#666666;">Or copy and paste this URL into your browser:<br>{{cancelUrl}}</p>',
               );
             }}
           >

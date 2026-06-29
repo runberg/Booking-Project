@@ -11,6 +11,7 @@ import { formatIsoDateToDmy, formatDateTimeDmy } from '../utils/date';
 import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
 import { TimingControl } from '../components/TimingControl';
 import { EmailDraftModal } from '../components/EmailDraftModal';
+import { PreviewModal } from '../components/PreviewModal';
 import { FeatureToggleCard } from '../components/FeatureToggleCard';
 
 interface User {
@@ -113,6 +114,23 @@ function getBookingDeleteConfirmLabel(isSubmitting: boolean, count: number): str
   return `Delete & send email${count > 1 ? 's' : ''}`;
 }
 
+const PREVIEW_VARS: Record<string, string> = {
+  name: 'Alex Johansen',
+  email: 'alex@example.com',
+  amenity: 'Swimming Pool',
+  date: '15 Jul 2026',
+  time: '10:00',
+  verificationUrl: '#preview-verification-link',
+  cancelUrl: '#preview-cancel-link',
+  checkinUrl: '#preview-checkin-link',
+  adminUrl: '#preview-admin-link',
+  count: '3',
+};
+
+function applyPreviewVars(html: string): string {
+  return html.replace(/\{\{(\w+)\}\}/g, (_, key: string) => PREVIEW_VARS[key] ?? `{{${key}}}`);
+}
+
 function getCheckinQrMessage(qrCount: number): string {
   if (qrCount === 0) return 'Check-in enabled. All amenities already had QR codes — no changes needed.';
   const unit = qrCount === 1 ? 'amenity' : 'amenities';
@@ -128,6 +146,7 @@ export const AdminDashboard: React.FC = () => {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [previewModal, setPreviewModal] = useState<{ subject: string; html: string } | null>(null);
   const [emailActionModal, setEmailActionModal] = useState<{
     mode: 'revoke' | 'delete' | 'reject';
     userId: string;
@@ -863,6 +882,18 @@ export const AdminDashboard: React.FC = () => {
     };
     const handleSubjectChange = (k: string, val: string) =>
       setEmailTemplates((prev) => patchEmailTemplate(prev, { key: k, subject: val }));
+    const openPreview = (key: string, subject: string) => {
+      const raw = editorDomRefs.current[key]?.innerHTML ?? '';
+      const body = applyPreviewVars(raw);
+      const previewSubject = applyPreviewVars(subject || '(no subject)');
+      const footerTpl = emailTemplates.find((x) => x.key === 'email_footer');
+      const footerHtml = footerTpl?.body?.trim() ?? '';
+      const footerBlock = footerHtml && key !== 'email_footer'
+        ? `<hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px"><p style="font-size:12px;color:#999;text-align:center;font-style:italic">${applyPreviewVars(footerHtml)}</p>`
+        : '';
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">${body}${footerBlock}</div>`;
+      setPreviewModal({ subject: previewSubject, html });
+    };
     if (isLoadingEmails) {
       return <TabLoadingSpinner message="Loading templates..." />;
     }
@@ -1114,7 +1145,8 @@ export const AdminDashboard: React.FC = () => {
                 onMount={(el) => { editorDomRefs.current[key] = el; }}
               />
 
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => openPreview(key, subject)}>Preview</Button>
                 <Button onClick={async () => {
                   try {
                     const body = editorDomRefs.current[key]?.innerHTML ?? '';
@@ -1896,6 +1928,14 @@ export const AdminDashboard: React.FC = () => {
           isSubmitting={bookingDeleteModal.isSubmitting}
           confirmLabel={getBookingDeleteConfirmLabel(bookingDeleteModal.isSubmitting, selectedBookingIds.size)}
           confirmClassName="bg-red-600 hover:bg-red-700 text-white"
+        />
+      )}
+
+      {previewModal && (
+        <PreviewModal
+          subject={previewModal.subject}
+          html={previewModal.html}
+          onClose={() => setPreviewModal(null)}
         />
       )}
 
