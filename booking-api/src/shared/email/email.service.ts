@@ -76,6 +76,35 @@ export class EmailService {
     });
   }
 
+  // Expands {{verifyButton}}, {{checkinButton}}, {{cancelButton}} to full
+  // button+URL HTML before variable substitution (so URLs are inserted raw,
+  // not HTML-escaped by renderTemplateBody).
+  private expandButtonPlaceholders(
+    body: string,
+    vars: Record<string, string>,
+  ): string {
+    const defs: Array<[string, string, string, string]> = [
+      ['verifyButton',  vars['verificationUrl'] ?? '', 'Verify Email',   '#16a34a'],
+      ['checkinButton', vars['checkinUrl']       ?? '', 'Check In',       '#2563eb'],
+      ['cancelButton',  vars['cancelUrl']        ?? '', 'Cancel Booking', '#dc3545'],
+    ];
+    let result = body;
+    for (const [key, url, label, color] of defs) {
+      if (!url || !result.includes(`{{${key}}}`)) continue;
+      const safeUrl = url.replaceAll('&', '&amp;');
+      result = result.replaceAll(
+        `{{${key}}}`,
+        `<div style="text-align:center">` +
+        `<a href="${safeUrl}" style="background-color:${color};color:white;padding:12px 24px;` +
+        `text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">${label}</a>` +
+        `<p style="font-size:13px;color:#666666;text-align:center">` +
+        `Or copy and paste this URL into your browser:<br>${safeUrl}</p>` +
+        `</div>`,
+      );
+    }
+    return result;
+  }
+
   private async getFromAddress(): Promise<string> {
     return (await this.settingsService.get('smtp_from')) ?? '';
   }
@@ -86,7 +115,7 @@ export class EmailService {
     const footer = footerText
       ? `<hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px"><p style="font-size:12px;color:#999;text-align:center;font-style:italic">${footerText}</p>`
       : '';
-    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${content}${footer}</div>`;
+    return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;text-align:center">${content}${footer}</div>`;
   }
 
   async sendVerificationEmail(
@@ -96,11 +125,9 @@ export class EmailService {
   ): Promise<void> {
     const verificationUrl = `${this.configService.get<string>('FRONTEND_URL', '')}/verify-email?token=${token}`;
     const tpl = await this.templates.getByKey('registration');
-    const body = this.renderTemplateBody(
-      tpl?.body ??
-        'Welcome {{name}}, please verify your email: {{verificationUrl}}',
-      { name, verificationUrl },
-    );
+    const vars = { name, verificationUrl };
+    const raw = tpl?.body ?? 'Welcome {{name}},<br>Please verify your email address:<br>{{verifyButton}}';
+    const body = this.renderTemplateBody(this.expandButtonPlaceholders(raw, vars), vars);
     const mailOptions = {
       from: await this.getFromAddress(),
       to: email,
@@ -176,10 +203,12 @@ export class EmailService {
     variables: Record<string, string>,
   ): Promise<void> {
     const tpl = await this.templates.getByKey(key);
-    // Variable values are HTML-escaped inside renderTemplateBody.
-    // The template body is stored as sanitized HTML and passes through
-    // directly — no additional escaping or \n→<br> conversion.
-    const html = this.renderTemplateBody(tpl?.body ?? '', variables);
+    // Expand button placeholders first (raw HTML, URL not escaped yet),
+    // then substitute remaining {{vars}} with HTML-escaped values.
+    const html = this.renderTemplateBody(
+      this.expandButtonPlaceholders(tpl?.body ?? '', variables),
+      variables,
+    );
     // Subject may itself contain {{variables}} (e.g. {{amenity}})
     const rawSubject = tpl?.subject ?? fallbackSubject;
     const subject = this.renderTemplateBody(rawSubject, variables);
