@@ -1,12 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { EmailTemplatesService } from '../email-templates/email-templates.service';
 import { SettingsService } from '../settings/settings.service';
+import { BookingLog } from '../bookings/booking-log.entity';
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private transporterBuiltAt = 0;
   private readonly TRANSPORTER_TTL = 60_000;
@@ -15,6 +19,8 @@ export class EmailService {
     private readonly configService: ConfigService,
     private readonly templates: EmailTemplatesService,
     private readonly settingsService: SettingsService,
+    @InjectRepository(BookingLog)
+    private readonly logRepo: Repository<BookingLog>,
   ) {}
 
   invalidateTransporter(): void {
@@ -76,17 +82,19 @@ export class EmailService {
     });
   }
 
-  // Expands {{verifyButton}}, {{checkinButton}}, {{cancelButton}} to full
-  // button+URL HTML before variable substitution (so URLs are inserted raw,
-  // not HTML-escaped by renderTemplateBody).
+  // Expands {{verifyButton}}, {{checkinButton}}, {{cancelButton}},
+  // {{resetPasswordButton}} to full button+URL HTML before variable
+  // substitution (so URLs are inserted raw, not HTML-escaped by renderTemplateBody).
   private expandButtonPlaceholders(
     body: string,
     vars: Record<string, string>,
   ): string {
     const defs: Array<[string, string, string, string]> = [
-      ['verifyButton',  vars['verificationUrl'] ?? '', 'Verify Email',   '#16a34a'],
-      ['checkinButton', vars['checkinUrl']       ?? '', 'Check In',       '#2563eb'],
-      ['cancelButton',  vars['cancelUrl']        ?? '', 'Cancel Booking', '#dc3545'],
+      ['verifyButton',        vars['verificationUrl'] ?? '', 'Verify Email',      '#16a34a'],
+      ['checkinButton',       vars['checkinUrl']       ?? '', 'Check In',          '#2563eb'],
+      ['cancelButton',        vars['cancelUrl']        ?? '', 'Cancel Booking',    '#dc3545'],
+      ['resetPasswordButton', vars['resetUrl']         ?? '', 'Reset Password',    '#dc3545'],
+      ['adminPanelButton',    vars['adminUrl']         ?? '', 'Go to Admin Panel', '#2563eb'],
     ];
     let result = body;
     for (const [key, url, label, color] of defs) {
@@ -109,13 +117,53 @@ export class EmailService {
     return (await this.settingsService.get('smtp_from')) ?? '';
   }
 
+  // Central send point — logs every delivery attempt and failure.
+  // Callers still receive the error so they can decide how to handle it.
+  private async dispatch(options: nodemailer.SendMailOptions): Promise<void> {
+    try {
+      await (await this.getTransporter()).sendMail(options);
+      this.logger.log(`Email delivered to ${String(options.to)} — "${options.subject}"`);
+    } catch (e: unknown) {
+      this.logger.error(
+        `Email delivery failed to ${String(options.to)} — "${options.subject}": ${e instanceof Error ? e.message : String(e)}`,
+      );
+      await this.logEmailFailure(String(options.to ?? ''), String(options.subject ?? ''));
+      throw e;
+    }
+  }
+
+  private async logEmailFailure(to: string, subject: string): Promise<void> {
+    try {
+      const log = this.logRepo.create({
+        action: 'email_failed',
+        bookingId: null,
+        amenityName: subject, // stores the email subject as context for the admin log
+        date: null,
+        startTime: null,
+        slotLength: null,
+        userId: '',
+        userEmail: to,
+        userName: '',
+        building: '',
+        apartmentNumber: '',
+        ipAddress: null,
+      });
+      await this.logRepo.save(log);
+    } catch (logError: unknown) {
+      this.logger.error('Failed to write email_failed log entry', logError);
+    }
+  }
+
   private async buildHtml(content: string): Promise<string> {
     const footerTpl = await this.templates.getByKey('email_footer');
     const footerText = footerTpl?.body?.trim() ?? '';
     const footer = footerText
-      ? `<hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px"><p style="font-size:12px;color:#999;text-align:center;font-style:italic">${footerText}</p>`
+      ? `<hr style="border:none;border-top:1px solid #eee;margin:32px 0 16px">` +
+        `<p style="font-size:12px;color:#999;text-align:center;font-style:italic">${footerText}</p>`
       : '';
-    return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;text-align:center">${content}${footer}</div>`;
+    // <center> is deprecated in HTML5 but is the only reliable centering mechanism
+    // across all email clients (including Outlook which ignores CSS text-align inheritance).
+    return `<center><div style="font-family:Arial,sans-serif;max-width:600px;text-align:center">${content}${footer}</div></center>`;
   }
 
   async sendVerificationEmail(
@@ -134,7 +182,7 @@ export class EmailService {
       subject: 'Verify Your Email Address',
       html: await this.buildHtml(body),
     };
-    await (await this.getTransporter()).sendMail(mailOptions);
+    await this.dispatch(mailOptions);
   }
 
   async sendPasswordResetEmail(
@@ -143,28 +191,7 @@ export class EmailService {
     name: string,
   ): Promise<void> {
     const resetUrl = `${this.configService.get<string>('FRONTEND_URL', '')}/reset-password?token=${token}`;
-    const content = `
-      <h2 style="color: #333;">Password Reset Request</h2>
-      <p>Hi ${this.escapeHtml(name)},</p>
-      <p>We received a request to reset your password. Click the button below to create a new password:</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${resetUrl}"
-           style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-          Reset Password
-        </a>
-      </div>
-      <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-      <p style="word-break: break-all; color: #666;">${resetUrl}</p>
-      <p>This link will expire in 1 hour.</p>
-      <p>If you didn't request a password reset, please ignore this email.</p>
-    `;
-    const mailOptions = {
-      from: await this.getFromAddress(),
-      to: email,
-      subject: 'Reset Your Password',
-      html: await this.buildHtml(content),
-    };
-    await (await this.getTransporter()).sendMail(mailOptions);
+    await this.sendTemplateEmail(email, 'Reset Your Password', 'password_reset', { name, resetUrl });
   }
 
   async sendGenericEmail(
@@ -179,7 +206,7 @@ export class EmailService {
       subject,
       html: await this.buildHtml(content),
     };
-    await (await this.getTransporter()).sendMail(mailOptions);
+    await this.dispatch(mailOptions);
   }
 
   async sendHtmlEmail(
@@ -193,7 +220,7 @@ export class EmailService {
       subject,
       html: await this.buildHtml(html),
     };
-    await (await this.getTransporter()).sendMail(mailOptions);
+    await this.dispatch(mailOptions);
   }
 
   async sendTemplateEmail(
@@ -218,6 +245,6 @@ export class EmailService {
       subject,
       html: await this.buildHtml(html),
     };
-    await (await this.getTransporter()).sendMail(mailOptions);
+    await this.dispatch(mailOptions);
   }
 }

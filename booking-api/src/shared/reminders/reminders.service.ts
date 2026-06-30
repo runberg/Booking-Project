@@ -171,9 +171,9 @@ export class RemindersService implements OnModuleInit {
         `Failed to send check-in email for booking ${booking.id}`,
         e,
       );
-      // Mark as sent anyway to prevent infinite retry loops; log the failure
       await this.bookingsService.markCheckinEmailSent(booking.id);
       await this.bookingsService.logEvent('checkin_email_failed', booking.id);
+      await this.notifyAdminsOfEmailFailure('check-in', user.email, booking.id, e);
     }
   }
 
@@ -214,9 +214,37 @@ export class RemindersService implements OnModuleInit {
       );
     } catch (e: unknown) {
       this.logger.error(`Failed to send reminder for booking ${booking.id}`, e);
-      // Mark as sent to prevent infinite retry; log the failure
       await this.bookingsService.markReminderSent(booking.id);
       await this.bookingsService.logEvent('reminder_failed', booking.id);
+      await this.notifyAdminsOfEmailFailure('reminder', user.email, booking.id, e);
+    }
+  }
+
+  private async notifyAdminsOfEmailFailure(
+    type: string,
+    recipientEmail: string,
+    bookingId: string,
+    error: unknown,
+  ): Promise<void> {
+    try {
+      const admins = await this.usersService.findAdminsAndSupers();
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const body =
+        `A scheduled ${type} email could not be delivered.\n\n` +
+        `Recipient: ${recipientEmail}\n` +
+        `Booking ID: ${bookingId}\n` +
+        `Error: ${errorMsg}\n\n` +
+        `Please check your email provider settings and daily sending limits.`;
+      for (const admin of admins) {
+        await this.emailService.sendGenericEmail(
+          admin.email,
+          `Email delivery failure — ${type}`,
+          body,
+        );
+      }
+      this.logger.log(`Admin(s) notified of ${type} email failure for booking ${bookingId}`);
+    } catch (notifyError: unknown) {
+      this.logger.error('Could not notify admins of email failure (mail server may be down)', notifyError);
     }
   }
 }

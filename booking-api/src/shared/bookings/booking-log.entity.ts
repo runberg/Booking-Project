@@ -23,7 +23,8 @@ export class BookingLog {
     | 'checkin_email_sent'
     | 'checkin_email_failed'
     | 'checked_in'
-    | 'confirmation_failed';
+    | 'confirmation_failed'
+    | 'email_failed';
 
   // Nullable for login events which have no associated booking
   @Column({ type: 'text', nullable: true })

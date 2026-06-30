@@ -8,7 +8,11 @@ type TemplateRecord = { key: string; subject: string | null; body: string };
 const DEFAULTS: Record<string, { subject: string; body: string }> = {
   registration: {
     subject: 'Verify Your Email Address',
-    body: '<p>Welcome {{name}},</p><p>Please verify your email to activate your account: <a href="{{verificationUrl}}">Verify Email</a></p>',
+    body: '<p>Welcome {{name}},</p><p>Please verify your email to activate your account.</p>{{verifyButton}}',
+  },
+  password_reset: {
+    subject: 'Reset Your Password',
+    body: '<p>Hi {{name}},</p><p>We received a request to reset your password. Click the button below to create a new password. This link will expire in 1 hour.</p>{{resetPasswordButton}}<p>If you did not request a password reset, please ignore this email.</p>',
   },
   booking_confirmation: {
     subject: 'Booking Confirmation',
@@ -16,11 +20,11 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
   },
   booking_reminder: {
     subject: 'Reminder: Your upcoming booking for {{amenity}}',
-    body: '<p>Hello {{name}},</p><p>This is a reminder that you have an upcoming booking:</p><p><strong>{{amenity}}</strong><br>{{date}} at {{time}}</p><div style="text-align:center;margin:24px 0"><a href="{{cancelUrl}}" style="background-color:#dc3545;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;">Cancel Booking</a></div><p style="text-align:center;font-size:12px;color:#666">Or copy this link into your browser:<br>{{cancelUrl}}</p><p>If you plan to attend, no action is needed.</p>',
+    body: '<p>Hello {{name}},</p><p>This is a reminder that you have an upcoming booking for <strong>{{amenity}}</strong> on <strong>{{date}}</strong> at <strong>{{time}}</strong>.</p>{{cancelButton}}<p>If you plan to attend, no action is needed.</p>',
   },
   booking_checkin: {
     subject: 'Time to check in: {{amenity}}',
-    body: '<p>Hello {{name}},</p><p>Your booking for <strong>{{amenity}}</strong> starts at <strong>{{time}}</strong> today. Please check in by scanning the QR code at the amenity.</p><div style="text-align:center;margin:24px 0"><a href="{{checkinUrl}}" style="background-color:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Check In Now</a></div><p style="text-align:center;font-size:12px;color:#666">Or copy this link:<br>{{checkinUrl}}</p>',
+    body: '<p>Hello {{name}},</p><p>Your booking for <strong>{{amenity}}</strong> starts at <strong>{{time}}</strong> today.</p>{{checkinButton}}',
   },
   registration_legal_text: {
     subject: '',
@@ -60,7 +64,7 @@ const DEFAULTS: Record<string, { subject: string; body: string }> = {
   },
   admin_approval_notification: {
     subject: 'Users awaiting admin approval',
-    body: '<p>There are currently <strong>{{count}}</strong> user(s) awaiting admin approval.</p><p>Please log in to the admin panel to review and approve or reject them.</p><div style="text-align:center;margin:24px 0"><a href="{{adminUrl}}" style="background-color:#2563eb;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold">Go to Admin Panel</a></div>',
+    body: '<p>There are currently <strong>{{count}}</strong> user(s) awaiting admin approval.</p><p>Please log in to the admin panel to review and approve or reject them.</p>{{adminPanelButton}}',
   },
   user_approved: {
     subject: 'Your account has been approved',
