@@ -1,6 +1,6 @@
-# Booking System
+# Booking System — v1.0.0
 
-A self-hosted amenity booking platform for residential buildings. Residents book facilities (gym, badminton, BBQ area, etc.) through a web app. Administrators manage users, buildings, amenities, booking restrictions, and review logs.
+A self-hosted amenity booking platform for residential buildings. Residents book facilities (gym, badminton, BBQ area, etc.) through a web app. Administrators manage users, buildings, amenities, booking restrictions, amenity closure periods, and review audit logs. Failed email deliveries are logged in the admin panel and trigger an admin notification.
 
 ## Stack
 
@@ -38,7 +38,7 @@ touch letsencrypt/acme.json && chmod 600 letsencrypt/acme.json
 ```yaml
 services:
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3
     container_name: traefik
     command:
       - --providers.docker=true
@@ -70,11 +70,21 @@ services:
       - traefik.http.routers.dashboard.middlewares=dashboard-auth
       # Generate the password hash: htpasswd -nB admin  (escape $ as $$ in yaml)
       - traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$2y$$05$$...
-      # Global HTTP → HTTPS redirect for all domains
+      # Global HTTP → HTTPS redirect for all domains (Traefik v3 HostRegexp syntax)
       - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-      - traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+      - traefik.http.routers.http-catchall.rule=HostRegexp(`.+`)
       - traefik.http.routers.http-catchall.entrypoints=web
       - traefik.http.routers.http-catchall.middlewares=redirect-to-https
+      # Shared security headers applied to all routers that reference secure-headers@docker
+      - traefik.http.middlewares.secure-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains=false
+      - traefik.http.middlewares.secure-headers.headers.stsPreload=false
+      - traefik.http.middlewares.secure-headers.headers.forceSTSHeader=true
+      - traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.secure-headers.headers.frameDeny=true
+      - traefik.http.middlewares.secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.secure-headers.headers.permissionsPolicy=geolocation=(), microphone=(), camera=()
     networks:
       - traefik-proxy
     restart: unless-stopped
@@ -236,6 +246,7 @@ services:
       - traefik.http.routers.myapp.rule=Host(`myapp.yourdomain.com`)
       - traefik.http.routers.myapp.entrypoints=websecure
       - traefik.http.routers.myapp.tls.certresolver=le
+      - traefik.http.routers.myapp.middlewares=secure-headers@docker
       - traefik.http.services.myapp.loadbalancer.server.port=80
     depends_on:
       traefik-ready:
@@ -265,6 +276,7 @@ networks:
 | `traefik.http.routers.<name>.rule=Host(...)` | Domain routing rule |
 | `traefik.http.routers.<name>.entrypoints=websecure` | HTTPS only (HTTP→HTTPS redirect is handled globally by Traefik) |
 | `traefik.http.routers.<name>.tls.certresolver=le` | Automatic Let's Encrypt certificate |
+| `traefik.http.routers.<name>.middlewares=secure-headers@docker` | Apply shared security headers (HSTS, frame deny, CSP, etc.) defined on the Traefik container |
 | `traefik.http.services.<name>.loadbalancer.server.port=PORT` | The internal port the container listens on |
 
 The `traefik-ready` service verifies Traefik is reachable before the app container starts. `depends_on: condition: service_completed_successfully` blocks the app until the check passes.
@@ -291,7 +303,7 @@ The `traefik-ready` service verifies Traefik is reachable before the app contain
 
 ## Before going live
 
-After the first deployment, log in as admin and complete all three steps below before sharing the system with residents. The admin dashboard will show a warning banner for each item that is not yet configured.
+After the first deployment, log in as admin and complete all steps below before sharing the system with residents. The admin dashboard will show a warning banner for each item that is not yet configured.
 
 ### 1. Configure email (required for user registration)
 
@@ -299,7 +311,11 @@ Go to **Admin → Settings** and enter your SMTP details. Without a working mail
 
 See [SMTP with Gmail](#smtp-with-gmail) below for a step-by-step example.
 
-### 2. Add buildings and units (required for registration)
+### 2. Enable admin approval (strongly recommended)
+
+Go to **Admin → Settings** and enable **Admin approval required**. With this on, every new account must be manually approved by an admin before the resident can make bookings. This is the most effective defence against fake registrations and bot accounts, since even a successfully created account cannot be used until a human reviews it.
+
+### 3. Add buildings and units (required for registration)
 
 Go to **Admin → Buildings and Units** and:
 1. Create each building by name.
@@ -308,7 +324,7 @@ Go to **Admin → Buildings and Units** and:
 
 Only **active** buildings appear on the registration page. A building cannot be activated until it has at least one unit number added.
 
-### 3. Add and activate amenities (required for bookings)
+### 4. Add and activate amenities (required for bookings)
 
 Go to **Admin → Amenities** and create each bookable facility (gym, BBQ area, etc.). Set opening hours and the booking slot length, then mark it as active. Until at least one amenity is active, residents will see an empty booking page.
 
@@ -319,6 +335,10 @@ Go to **Admin → Amenities** and create each bookable facility (gym, BBQ area, 
 Visit **Admin → Content** to customise:
 - Rules and Regulations text shown during registration and booking
 - Email templates for booking confirmations and account emails
+
+**Amenity closures:** Go to **Admin → Amenities** and use the Closure button on any amenity to block a date range for maintenance. Existing bookings within the range are shown before confirming, and a cancellation email is sent to each affected resident.
+
+**Email delivery monitoring:** If an outbound email fails to deliver (e.g. daily SMTP limit reached), the failure is written to **Admin → Logs** with action `email_failed` and an alert is sent to all admin and super users.
 
 ---
 

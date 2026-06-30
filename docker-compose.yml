@@ -70,6 +70,7 @@ services:
       - traefik.http.routers.booking.rule=Host(`${DOMAIN}`)
       - traefik.http.routers.booking.entrypoints=websecure
       - traefik.http.routers.booking.tls.certresolver=le
+      - traefik.http.routers.booking.middlewares=secure-headers@docker
       - traefik.http.services.booking.loadbalancer.server.port=80
     depends_on:
       traefik-ready:
