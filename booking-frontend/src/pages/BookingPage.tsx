@@ -17,11 +17,16 @@ type AmenityPublic = {
   daysAhead: number; // allowed days ahead
   maxPerPeriod: number | null;
   maxPerDay: number | null;
+  closureStart: string | null; // yyyy-mm-dd
+  closureEnd: string | null;   // yyyy-mm-dd
+  closureActive: boolean;
+  closureReason: string | null;
 };
 
 const placeholder = 'https://via.placeholder.com/120x80?text=Amenity';
 
-function dayButtonClass(disabled: boolean, isSelected: boolean): string {
+function dayButtonClass(disabled: boolean, isSelected: boolean, isClosed: boolean): string {
+  if (isClosed) return 'border-gray-200 text-gray-300 cursor-not-allowed bg-gray-100 line-through';
   if (disabled) return 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50';
   if (isSelected) return 'border-primary-600 text-primary-700';
   return 'border-gray-200 text-gray-700 hover:border-gray-300';
@@ -51,20 +56,34 @@ function CalendarGrid({ calendarWeeks, myBookings, selected, selectedDate, setSe
             {week.map((d, di) => {
               if (!d) return <div key={`empty-${wi}-${di}`} className="py-2 text-xs text-center text-gray-300 border border-transparent">—</div>;
               const dayBookingsCount = myBookings.filter((b) => b.amenityId === (selected?.id || '') && b.date === d).length;
-              const dayDisabled = selected?.maxPerDay != null && dayBookingsCount >= (selected?.maxPerDay || 0);
+              const maxDayReached = selected?.maxPerDay != null && dayBookingsCount >= (selected?.maxPerDay || 0);
+              const isClosed = Boolean(
+                selected?.closureActive &&
+                selected.closureStart &&
+                selected.closureEnd &&
+                d >= selected.closureStart &&
+                d <= selected.closureEnd,
+              );
               const handleDayClick = () => {
-                if (dayDisabled) {
-                  setInfoMessage('You have already made a booking this day');
+                if (isClosed) {
+                  setInfoMessage(selected?.closureReason ? `Closed: ${selected.closureReason}` : 'This amenity is closed for maintenance on this date.');
                   return;
                 }
                 setSelectedDate(d);
                 setSelectedTime('');
               };
+              let closureTitle: string | undefined;
+              if (isClosed) {
+                closureTitle = selected?.closureReason
+                  ? `Closed: ${selected.closureReason}`
+                  : 'Closed for maintenance';
+              }
               return (
                 <button
                   key={d}
-                  disabled={dayDisabled}
-                  className={`border rounded-md py-2 text-xs text-center ${dayButtonClass(dayDisabled, selectedDate === d)}`}
+                  disabled={maxDayReached}
+                  title={closureTitle}
+                  className={`border rounded-md py-2 text-xs text-center ${dayButtonClass(isClosed || maxDayReached, selectedDate === d, isClosed)}`}
                   onClick={handleDayClick}
                 >
                   {new Date(d).getDate()}
@@ -455,6 +474,13 @@ export const BookingPage: React.FC = () => {
           <p className="text-xs sm:text-sm text-gray-600">
             Bookings can only be created {selected.daysAhead} days ahead of today. Only {selected.maxPerPeriod} bookings per user within this time period and only {selected.maxPerDay} bookings per user per day.
           </p>
+        )}
+        {selected?.closureActive && selected.closureStart && selected.closureEnd && (
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs sm:text-sm text-amber-800">
+            <span className="font-semibold">Closed {selected.closureStart} – {selected.closureEnd}</span>
+            {selected.closureReason && `: ${selected.closureReason}`}
+            {'. '}Dates in this period are unavailable for booking.
+          </div>
         )}
         <div>
           <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Select date</h4>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Button } from '../components/Button';
+import { EmailDraftModal } from '../components/EmailDraftModal';
 import { api } from '../services/authService';
 import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
 
@@ -15,6 +16,35 @@ interface Amenity {
   bookingRestrictionId?: string | null;
   slotLength: number;
   qrToken: string | null;
+  closureStart: string | null;
+  closureEnd: string | null;
+  closureActive: boolean;
+  closureReason: string | null;
+}
+
+interface ConflictBooking {
+  id: string;
+  userName: string;
+  userEmail: string;
+  date: string;
+  startTime: string;
+}
+
+interface ClosureState {
+  amenity: Amenity;
+  start: string;
+  end: string;
+  active: boolean;
+  reason: string;
+  conflicts: ConflictBooking[] | null; // null = not yet checked
+  isChecking: boolean;
+  isSaving: boolean;
+}
+
+interface ClosureEmailDraft {
+  subject: string;
+  body: string;
+  isSubmitting: boolean;
 }
 
 const placeholder = 'https://via.placeholder.com/80x80?text=Amenity';
@@ -27,12 +57,13 @@ export const AmenitiesAdmin: React.FC = () => {
   const [editing, setEditing] = useState<Partial<Amenity>>({});
   const [error, setError] = useState<string>('');
   const [createOpen, setCreateOpen] = useState<boolean>(false);
-  // Restrictions state
   const [restrictions, setRestrictions] = useState<Array<{ id: string; name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number; isActive: boolean }>>([]);
   const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
   const [qrModal, setQrModal] = useState<{ amenity: Amenity; dataUrl: string } | null>(null);
   const [createRestrictionOpen, setCreateRestrictionOpen] = useState<boolean>(false);
   const [newRestriction, setNewRestriction] = useState<{ name: string; daysAhead: number; maxPerPeriod: number; maxPerDay: number }>({ name: '', daysAhead: 14, maxPerPeriod: 2, maxPerDay: 1 });
+  const [closureState, setClosureState] = useState<ClosureState | null>(null);
+  const [closureEmailDraft, setClosureEmailDraft] = useState<ClosureEmailDraft | null>(null);
 
   useEffect(() => {
     fetchAmenities();
@@ -55,7 +86,7 @@ export const AmenitiesAdmin: React.FC = () => {
     try {
       const { data } = await api.get('/admin/restrictions');
       setRestrictions(data);
-    } catch { // NOSONAR — intentionally silent; UI handles empty-list state
+    } catch { // NOSONAR
     }
   };
 
@@ -153,11 +184,145 @@ export const AmenitiesAdmin: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  // ── Closure helpers ───────────────────────────────────────────────────────
+
+  const openClosureModal = (a: Amenity) => {
+    setClosureState({
+      amenity: a,
+      start: a.closureStart ?? '',
+      end: a.closureEnd ?? '',
+      active: a.closureActive,
+      reason: a.closureReason ?? '',
+      conflicts: null,
+      isChecking: false,
+      isSaving: false,
+    });
+  };
+
+  const patchClosure = (patch: Partial<ClosureState>) =>
+    setClosureState((s) => (s ? { ...s, ...patch, conflicts: null } : s));
+
+  // Step 1: check for conflicts, then either save directly or ask for email
+  const handleApplyClosure = async () => {
+    if (!closureState) return;
+    const { amenity, start, end, active, reason } = closureState;
+
+    if (active && (!start || !end)) {
+      setError('Please set both start and end dates for the closure.');
+      return;
+    }
+
+    // If disabling the closure — just save immediately, no conflict check needed.
+    if (!active) {
+      setClosureState((s) => s ? { ...s, isSaving: true } : s);
+      try {
+        const { data } = await api.put(`/admin/amenities/${amenity.id}`, {
+          closureStart: null,
+          closureEnd: null,
+          closureActive: false,
+          closureReason: null,
+        });
+        setAmenities((prev) => prev.map((x) => (x.id === data.id ? data : x)));
+        setClosureState(null);
+      } catch (e: any) {
+        setError(e.response?.data?.message || 'Failed to save closure settings');
+        setClosureState((s) => s ? { ...s, isSaving: false } : s);
+      }
+      return;
+    }
+
+    // Active closure — check for conflicts first.
+    setClosureState((s) => s ? { ...s, isChecking: true, conflicts: null } : s);
+    try {
+      const { data } = await api.get(
+        `/admin/amenities/${amenity.id}/closure-conflicts`,
+        { params: { start, end } },
+      );
+      const conflicts: ConflictBooking[] = data;
+      setClosureState((s) => s ? { ...s, isChecking: false, conflicts } : s);
+
+      if (conflicts.length === 0) {
+        // No conflicts — save directly.
+        await saveClosureDirectly(amenity.id, start, end, reason);
+      }
+      // If conflicts exist, the warning UI renders and waits for user action.
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Failed to check for conflicts');
+      setClosureState((s) => s ? { ...s, isChecking: false } : s);
+    }
+  };
+
+  const saveClosureDirectly = async (id: string, start: string, end: string, reason: string) => {
+    setClosureState((s) => s ? { ...s, isSaving: true } : s);
+    try {
+      const { data } = await api.put(`/admin/amenities/${id}`, {
+        closureStart: start,
+        closureEnd: end,
+        closureActive: true,
+        closureReason: reason || null,
+      });
+      setAmenities((prev) => prev.map((x) => (x.id === data.id ? data : x)));
+      setClosureState(null);
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Failed to save closure');
+      setClosureState((s) => s ? { ...s, isSaving: false } : s);
+    }
+  };
+
+  // Step 2: open email draft after admin confirms they want to proceed with conflicts
+  const handleProceedWithConflicts = async () => {
+    if (!closureState) return;
+    try {
+      const { data } = await api.get('/admin/email-templates');
+      const tpl = data.find((t: any) => t.key === 'booking_deleted_by_admin');
+      setClosureEmailDraft({
+        subject: tpl?.subject ?? 'Booking Cancellation — Maintenance',
+        body: tpl?.body ?? 'Dear {{name}},<br><br>We regret to inform you that your booking has been cancelled due to a scheduled maintenance closure.',
+        isSubmitting: false,
+      });
+    } catch {
+      setClosureEmailDraft({
+        subject: 'Booking Cancellation — Maintenance',
+        body: 'Dear {{name}},<br><br>We regret to inform you that your booking has been cancelled due to a scheduled maintenance closure.',
+        isSubmitting: false,
+      });
+    }
+  };
+
+  // Step 3: save closure + send cancellation emails + delete bookings
+  const handleSendAndApply = async (emailBody: string) => {
+    if (!closureState || !closureEmailDraft) return;
+    const { amenity, start, end, reason } = closureState;
+    setClosureEmailDraft((s) => s ? { ...s, isSubmitting: true } : s);
+    try {
+      // Save the closure first so the backend can use the dates in cancel-conflicting.
+      await api.put(`/admin/amenities/${amenity.id}`, {
+        closureStart: start,
+        closureEnd: end,
+        closureActive: true,
+        closureReason: reason || null,
+      });
+      const { data: result } = await api.post(
+        `/admin/amenities/${amenity.id}/closure/cancel-conflicting`,
+        { emailBody, emailSubject: closureEmailDraft.subject },
+      );
+      // Refresh the amenity in state.
+      const { data: updated } = await api.get('/admin/amenities');
+      setAmenities(updated);
+      setClosureEmailDraft(null);
+      setClosureState(null);
+      setError(`Closure saved. ${result.cancelled} booking(s) cancelled and notified.`);
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Failed to apply closure and cancel bookings');
+      setClosureEmailDraft((s) => s ? { ...s, isSubmitting: false } : s);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   const renderAmenitiesContent = () => {
     if (isLoading) {
-      return (
-        <TabLoadingSpinner message="Loading amenities..." />
-      );
+      return <TabLoadingSpinner message="Loading amenities..." />;
     }
     if (amenities.length === 0) {
       return (
@@ -176,6 +341,7 @@ export const AmenitiesAdmin: React.FC = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slot</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Restriction</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closure</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
@@ -240,14 +406,21 @@ export const AmenitiesAdmin: React.FC = () => {
                   {editingId === a.id ? (
                     <div className="flex items-center space-x-3">
                       <input type="checkbox" checked={editing.isActive ?? a.isActive} onChange={(e) => patchEditing({ isActive: e.target.checked })} />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                      />
+                      <input type="file" accept="image/*" onChange={handleImageChange} />
                     </div>
                   ) : (
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${a.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{a.isActive ? 'Active' : 'Inactive'}</span>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${a.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                      {a.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {a.closureActive && a.closureStart && a.closureEnd ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                      {a.closureStart} – {a.closureEnd}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs">—</span>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
@@ -259,6 +432,7 @@ export const AmenitiesAdmin: React.FC = () => {
                   ) : (
                     <>
                       <Button variant="secondary" onClick={() => startEdit(a)}>Edit</Button>
+                      <Button variant="secondary" onClick={() => openClosureModal(a)}>Closure</Button>
                       <Button variant="secondary" onClick={() => a.qrToken ? openQrModal(a) : regenerateQr(a)} title={a.qrToken ? 'View QR code' : 'Generate QR code'}>QR</Button>
                       <Button variant="secondary" className="text-red-600 hover:text-red-900" onClick={() => deleteAmenity(a.id)}>Delete</Button>
                     </>
@@ -299,6 +473,7 @@ export const AmenitiesAdmin: React.FC = () => {
           />
         )}
       </div>
+
       {/* Create Amenity Modal */}
       {createOpen && (
         <div className="fixed inset-0 z-50">
@@ -359,10 +534,7 @@ export const AmenitiesAdmin: React.FC = () => {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      if (file.size > MAX_IMAGE_BYTES) {
-                        setError('Image is too large. Max size is 2 MB.');
-                        return;
-                      }
+                      if (file.size > MAX_IMAGE_BYTES) { setError('Image is too large. Max size is 2 MB.'); return; }
                       setError('');
                       const reader = new FileReader();
                       reader.onload = () => setNewAmenity((s) => ({ ...s, imageUrl: reader.result as string }));
@@ -379,13 +551,14 @@ export const AmenitiesAdmin: React.FC = () => {
           </div>
         </div>
       )}
+
       {!restrictions.length && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-sm text-yellow-800">Create a booking restriction first to add an amenity.</div>
       )}
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-      {/* List */}
+      {/* Amenity list */}
       <div className="bg-white border border-gray-200 rounded-md p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
           <h3 className="text-md font-semibold text-gray-900 mb-2 sm:mb-0">Amenities</h3>
@@ -395,6 +568,7 @@ export const AmenitiesAdmin: React.FC = () => {
         </div>
         {renderAmenitiesContent()}
       </div>
+
       {/* QR Code Modal */}
       {qrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -463,6 +637,135 @@ export const AmenitiesAdmin: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Closure Modal */}
+      {closureState && !closureEmailDraft && (
+        <div className="fixed inset-0 z-50">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <button type="button" aria-label="Close" className="fixed inset-0 bg-black/20 cursor-default" onClick={() => setClosureState(null)} />
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                Closure Period — {closureState.amenity.name}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Set a date range during which this amenity cannot be booked.
+              </p>
+
+              <div className="space-y-4">
+                {/* Active toggle */}
+                <div className="flex items-center gap-3">
+                  <input
+                    id="closure-active"
+                    type="checkbox"
+                    checked={closureState.active}
+                    onChange={(e) => patchClosure({ active: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="closure-active" className="text-sm font-medium text-gray-700">
+                    Closure active
+                  </label>
+                </div>
+
+                {closureState.active && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="closure-start" className="block text-sm font-medium text-gray-700 mb-1">From (inclusive)</label>
+                        <input
+                          id="closure-start"
+                          type="date"
+                          className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                          value={closureState.start}
+                          onChange={(e) => patchClosure({ start: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="closure-end" className="block text-sm font-medium text-gray-700 mb-1">To (inclusive)</label>
+                        <input
+                          id="closure-end"
+                          type="date"
+                          className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                          value={closureState.end}
+                          onChange={(e) => patchClosure({ end: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="closure-reason" className="block text-sm font-medium text-gray-700 mb-1">Reason (optional, shown to users)</label>
+                      <input
+                        id="closure-reason"
+                        type="text"
+                        className="w-full rounded-md border border-gray-300 py-2 px-3 text-sm"
+                        placeholder="e.g. Maintenance, Renovation…"
+                        value={closureState.reason}
+                        onChange={(e) => patchClosure({ reason: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Conflict warning */}
+                {closureState.conflicts !== null && closureState.conflicts.length > 0 && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 space-y-2">
+                    <p className="font-semibold">
+                      {closureState.conflicts.length} existing booking{closureState.conflicts.length > 1 ? 's' : ''} fall within this period:
+                    </p>
+                    <ul className="list-disc list-inside space-y-0.5 text-xs max-h-32 overflow-y-auto">
+                      {closureState.conflicts.map((c) => (
+                        <li key={c.id}>{c.userName} — {c.date} at {c.startTime}</li>
+                      ))}
+                    </ul>
+                    <p>If you continue, a cancellation email will be sent to each affected user and their bookings will be removed.</p>
+                    <Button
+                      onClick={handleProceedWithConflicts}
+                      className="mt-1 bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      Continue — review cancellation email
+                    </Button>
+                  </div>
+                )}
+
+                {closureState.conflicts !== null && closureState.conflicts.length === 0 && (
+                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+                    No existing bookings in this period.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setClosureState(null)}>Cancel</Button>
+                <Button
+                  onClick={handleApplyClosure}
+                  disabled={closureState.isChecking || closureState.isSaving || (closureState.conflicts !== null && closureState.conflicts.length > 0)}
+                >
+                  {closureState.isChecking ? 'Checking…' : closureState.isSaving ? 'Saving…' : closureState.active ? 'Check & Apply' : 'Remove Closure'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Closure — email draft modal */}
+      {closureEmailDraft && closureState && (
+        <EmailDraftModal
+          title={`Cancellation Email — ${closureState.amenity.name}`}
+          description={`This email will be sent to ${closureState.conflicts?.length ?? 0} user(s) whose bookings fall within the closure period (${closureState.start} – ${closureState.end}).`}
+          variablesHint="Available: {{name}}, {{email}}"
+          subject={closureEmailDraft.subject}
+          body={closureEmailDraft.body}
+          variables={[
+            { tag: '{{name}}', label: 'Name' },
+            { tag: '{{email}}', label: 'Email' },
+          ]}
+          onSubjectChange={(v) => setClosureEmailDraft((s) => s ? { ...s, subject: v } : s)}
+          onClose={() => setClosureEmailDraft(null)}
+          onConfirm={handleSendAndApply}
+          isSubmitting={closureEmailDraft.isSubmitting}
+          confirmLabel="Send & Apply Closure"
+          confirmClassName="bg-amber-600 hover:bg-amber-700 text-white"
+        />
+      )}
     </div>
   );
 };
@@ -476,6 +779,8 @@ const RestrictionsAdmin: React.FC<{
   const [creating, setCreating] = useState({ name: '', daysAhead: 14, maxPerPeriod: 2, maxPerDay: 1 });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ name?: string; daysAhead?: number; maxPerPeriod?: number; maxPerDay?: number; isActive?: boolean }>({});
+
+  const patchEditing = (patch: typeof editing) => setEditing((s) => ({ ...s, ...patch }));
 
   const createRestriction = async () => {
     if (!creating.name.trim()) return onError('Name is required');
@@ -592,5 +897,3 @@ const RestrictionsAdmin: React.FC<{
     </div>
   );
 };
-
-

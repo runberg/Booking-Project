@@ -46,6 +46,19 @@ export class Amenity {
   @Column({ type: 'text', nullable: true })
   qrToken: string | null;
 
+  // Optional closure period — bookings blocked and calendar greyed out when active.
+  @Column({ type: 'text', nullable: true })
+  closureStart: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  closureEnd: string | null;
+
+  @Column({ default: false })
+  closureActive: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  closureReason: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

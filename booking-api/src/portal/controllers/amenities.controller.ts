@@ -65,6 +65,10 @@ export class AmenitiesController {
         idToRestriction.get(a.bookingRestrictionId || '')?.maxPerPeriod ?? null,
       maxPerDay:
         idToRestriction.get(a.bookingRestrictionId || '')?.maxPerDay ?? null,
+      closureStart: a.closureStart,
+      closureEnd: a.closureEnd,
+      closureActive: a.closureActive,
+      closureReason: a.closureReason,
     }));
   }
 

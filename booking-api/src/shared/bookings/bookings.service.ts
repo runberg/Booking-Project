@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, SelectQueryBuilder, IsNull, In } from 'typeorm';
 import { Booking } from './booking.entity';
@@ -66,6 +66,18 @@ export class BookingsService implements OnModuleInit {
     slotLength: number;
     ipAddress?: string;
   }) {
+    const amenity = await this.amenitiesService.findOne(data.amenityId);
+    if (
+      amenity?.closureActive &&
+      amenity.closureStart &&
+      amenity.closureEnd &&
+      data.date >= amenity.closureStart &&
+      data.date <= amenity.closureEnd
+    ) {
+      throw new BadRequestException(
+        'This amenity is closed for maintenance on that date.',
+      );
+    }
     const { ipAddress, ...bookingData } = data;
     const booking = this.bookingsRepo.create(bookingData);
     const saved = await this.bookingsRepo.save(booking);
@@ -699,6 +711,18 @@ export class BookingsService implements OnModuleInit {
       .execute();
     await this.bookingsRepo.delete(id);
     await this.writeLog('delete', booking);
+  }
+
+  async listInRangeForAmenity(amenityId: string, start: string, end: string) {
+    const items = await this.bookingsRepo
+      .createQueryBuilder('b')
+      .where('b.amenityId = :amenityId', { amenityId })
+      .andWhere('b.date >= :start', { start })
+      .andWhere('b.date <= :end', { end })
+      .orderBy('b.date', 'ASC')
+      .addOrderBy('b.startTime', 'ASC')
+      .getMany();
+    return this.enrichBookings(items);
   }
 
   private async enrichBookings(items: Booking[]) {
