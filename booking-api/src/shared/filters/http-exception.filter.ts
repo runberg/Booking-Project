@@ -12,7 +12,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost): void {
+  async catch(exception: unknown, host: ArgumentsHost): Promise<void> {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();
@@ -31,7 +31,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       );
     }
 
-    void reply.status(status).send({
+    await reply.status(status).send({
       statusCode: status,
       message,
       timestamp: new Date().toISOString(),

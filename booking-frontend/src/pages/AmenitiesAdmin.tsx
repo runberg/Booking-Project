@@ -5,6 +5,12 @@ import { EmailDraftModal } from '../components/EmailDraftModal';
 import { api } from '../services/authService';
 import { TabLoadingSpinner } from '../components/TabLoadingSpinner';
 
+function getClosureButtonLabel(isChecking: boolean, isSaving: boolean, active: boolean): string {
+  if (isChecking) return 'Checking…';
+  if (isSaving) return 'Saving…';
+  return active ? 'Check & Apply' : 'Remove Closure';
+}
+
 interface Amenity {
   id: string;
   name: string;
@@ -738,7 +744,7 @@ export const AmenitiesAdmin: React.FC = () => {
                   onClick={handleApplyClosure}
                   disabled={closureState.isChecking || closureState.isSaving || (closureState.conflicts !== null && closureState.conflicts.length > 0)}
                 >
-                  {closureState.isChecking ? 'Checking…' : closureState.isSaving ? 'Saving…' : closureState.active ? 'Check & Apply' : 'Remove Closure'}
+                  {getClosureButtonLabel(closureState.isChecking, closureState.isSaving, closureState.active)}
                 </Button>
               </div>
             </div>

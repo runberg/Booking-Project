@@ -102,11 +102,25 @@ function patchEmailTemplate(prev: EmailTemplate[], patch: { key: string; body?: 
   return copy;
 }
 
-function getEmailActionConfirmLabel(mode: 'revoke' | 'delete' | 'reject', isSubmitting: boolean): string {
+type EmailActionMode = 'revoke' | 'delete' | 'reject';
+
+function getEmailActionConfirmLabel(mode: EmailActionMode, isSubmitting: boolean): string {
   if (isSubmitting) return 'Please wait…';
   if (mode === 'revoke') return 'Revoke access & send email';
   if (mode === 'reject') return 'Reject & send email';
   return 'Delete account & send email';
+}
+
+function getEmailActionModalTitle(mode: EmailActionMode): string {
+  if (mode === 'revoke') return 'Revoke booking access';
+  if (mode === 'reject') return 'Reject account application';
+  return 'Delete user account';
+}
+
+function getEmailActionModalDescription(mode: EmailActionMode, userName: string): string {
+  if (mode === 'revoke') return `Revoking access for "${userName}" will prevent them from making bookings. Edit the notification email below before confirming.`;
+  if (mode === 'reject') return `Rejecting "${userName}" will remove their account. Edit the notification email below before confirming.`;
+  return `Deleting "${userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`;
 }
 
 function getBookingDeleteConfirmLabel(isSubmitting: boolean, count: number): string {
@@ -148,7 +162,7 @@ function applyPreviewVars(html: string): string {
 // The editor wraps {{var}} pills in styled <span> tags for display only.
 // Strip those wrappers before rendering a preview so the text looks like a real email.
 function stripDecoratorSpans(html: string): string {
-  return html.replace(/<span\b[^>]*>/g, '').replace(/<\/span>/g, '');
+  return html.replaceAll(/<span\b[^>]*>/g, '').replaceAll(/<\/span>/g, '');
 }
 
 function getCheckinQrMessage(qrCount: number): string {
@@ -508,8 +522,11 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const openEmailActionModal = async (user: User, mode: 'revoke' | 'delete' | 'reject') => {
-    const templateKey = mode === 'revoke' ? 'user_access_revoked' : mode === 'reject' ? 'user_rejected' : 'user_account_deleted';
+  const openEmailActionModal = async (user: User, mode: EmailActionMode) => {
+    let templateKey: string;
+    if (mode === 'revoke') templateKey = 'user_access_revoked';
+    else if (mode === 'reject') templateKey = 'user_rejected';
+    else templateKey = 'user_account_deleted';
     try {
       const { data } = await api.get('/admin/email-templates');
       const tpl = data.find((t: any) => t.key === templateKey);
@@ -529,14 +546,16 @@ export const AdminDashboard: React.FC = () => {
   const confirmEmailAction = async (body: string) => {
     if (!emailActionModal) return;
     setEmailActionModal((prev) => prev ? { ...prev, isSubmitting: true } : null);
-    const endpoint = emailActionModal.mode === 'revoke'
-      ? `/admin/users/${emailActionModal.userId}/revoke`
-      : emailActionModal.mode === 'reject'
-        ? `/admin/users/${emailActionModal.userId}/reject`
-        : `/admin/users/${emailActionModal.userId}/delete-account`;
+    let endpoint: string;
+    if (emailActionModal.mode === 'revoke') endpoint = `/admin/users/${emailActionModal.userId}/revoke`;
+    else if (emailActionModal.mode === 'reject') endpoint = `/admin/users/${emailActionModal.userId}/reject`;
+    else endpoint = `/admin/users/${emailActionModal.userId}/delete-account`;
     try {
       await api.post(endpoint, { subject: emailActionModal.subject, emailBody: body });
-      const msg = emailActionModal.mode === 'revoke' ? 'User access revoked' : emailActionModal.mode === 'reject' ? 'User rejected' : 'User account deleted';
+      let msg: string;
+      if (emailActionModal.mode === 'revoke') msg = 'User access revoked';
+      else if (emailActionModal.mode === 'reject') msg = 'User rejected';
+      else msg = 'User account deleted';
       setNotification({ type: 'success', message: msg });
       setEmailActionModal(null);
       fetchUsers();
@@ -1898,14 +1917,8 @@ export const AdminDashboard: React.FC = () => {
 
       {emailActionModal && (
         <EmailDraftModal
-          title={emailActionModal.mode === 'revoke' ? 'Revoke booking access' : emailActionModal.mode === 'reject' ? 'Reject account application' : 'Delete user account'}
-          description={
-            emailActionModal.mode === 'revoke'
-              ? `Revoking access for "${emailActionModal.userName}" will prevent them from making bookings. Edit the notification email below before confirming.`
-              : emailActionModal.mode === 'reject'
-                ? `Rejecting "${emailActionModal.userName}" will remove their account. Edit the notification email below before confirming.`
-                : `Deleting "${emailActionModal.userName}" will permanently remove their account and all their bookings. Edit the notification email below before confirming.`
-          }
+          title={getEmailActionModalTitle(emailActionModal.mode)}
+          description={getEmailActionModalDescription(emailActionModal.mode, emailActionModal.userName)}
           variablesHint={
             emailActionModal.mode === 'reject'
               ? <>Variable <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> will be replaced automatically.</>
