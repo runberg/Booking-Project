@@ -43,6 +43,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 900_000, limit: 10 } })
   async login(
     @Body() loginDto: LoginDto,
     @Request() req: LoginRequest,
@@ -67,6 +68,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 3_600_000, limit: 5 } })
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
   ): Promise<{ message: string }> {
@@ -75,6 +77,7 @@ export class AuthController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 3_600_000, limit: 10 } })
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<{ message: string }> {

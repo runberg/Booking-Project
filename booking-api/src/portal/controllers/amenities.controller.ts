@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AmenitiesService } from '../../shared/amenities/amenities.service';
@@ -73,6 +74,7 @@ export class AmenitiesController {
   }
 
   @Get('availability')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   async listAvailability() {
     const amenities = await this.amenitiesService.listActive();
 

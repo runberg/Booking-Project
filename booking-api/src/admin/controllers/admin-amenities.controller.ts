@@ -72,7 +72,7 @@ export class AdminAmenitiesController {
       description?: string;
       openTime?: string;
       closeTime?: string;
-      imageUrl?: string;
+      imageUrl?: string | null;
       slotLength?: number;
       isActive?: boolean;
       bookingRestrictionId?: string | null;
@@ -82,6 +82,16 @@ export class AdminAmenitiesController {
       closureReason?: string | null;
     },
   ) {
+    if (body.imageUrl) {
+      try {
+        const parsed = new URL(body.imageUrl);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          throw new BadRequestException('imageUrl must use http or https');
+        }
+      } catch {
+        throw new BadRequestException('imageUrl must be a valid URL');
+      }
+    }
     return this.amenitiesService.update(id, body);
   }
 

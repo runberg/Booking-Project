@@ -5,7 +5,9 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import helmet from '@fastify/helmet';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './shared/filters/http-exception.filter';
 
 interface PgTypeRegistry {
   setTypeParser(oid: number, parseFn: (value: string) => unknown): void;
@@ -28,6 +30,9 @@ async function bootstrap() {
     new FastifyAdapter({ logger: true, bodyLimit: 2 * 1024 * 1024 }),
   );
 
+  // Security headers — CSP disabled as this is a pure JSON API with no HTML served.
+  await app.register(helmet, { contentSecurityPolicy: false });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -35,6 +40,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   const corsOrigin = process.env.CORS_ORIGIN;
   app.enableCors({

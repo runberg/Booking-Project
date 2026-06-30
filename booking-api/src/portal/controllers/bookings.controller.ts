@@ -182,6 +182,7 @@ export class BookingsController {
     const amenity = await this.amenitiesService.findOne(body.amenityId);
     let daysAhead = 14;
     let maxPerPeriod: number | null = null;
+    let maxPerDay: number | null = null;
     if (amenity?.bookingRestrictionId) {
       const rr = await this.restrictionsService.findOne(
         amenity.bookingRestrictionId,
@@ -189,6 +190,20 @@ export class BookingsController {
       if (rr) {
         daysAhead = rr.daysAhead ?? daysAhead;
         maxPerPeriod = rr.maxPerPeriod ?? null;
+        maxPerDay = rr.maxPerDay ?? null;
+      }
+    }
+    if (maxPerDay != null && maxPerDay > 0) {
+      const countOnDay = await this.bookingsService.countForUserInRange({
+        userId,
+        amenityId: body.amenityId,
+        startDate: body.date,
+        endDate: body.date,
+      });
+      if (countOnDay >= maxPerDay) {
+        throw new ConflictException(
+          'You have reached the daily booking limit for this amenity',
+        );
       }
     }
     if (maxPerPeriod != null && maxPerPeriod > 0) {
