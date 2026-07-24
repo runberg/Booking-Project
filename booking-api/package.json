@@ -44,7 +44,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sanitize-html": "^2.17.4",
-    "typeorm": "^0.3.30"
+    "typeorm": "^0.3.31"
   },
   "overrides": {
     "multer": "2.2.0"
