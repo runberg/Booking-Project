@@ -44,3 +44,9 @@ coverage/
 # === Optional: frontend build (if you add React/Vite later) ===
 booking-frontend/node_modules/
 booking-frontend/dist/
+
+# Private migration archives; never publish secrets, runtime data or uploads.
+/.local-state/
+
+# Private conversational context belongs outside the repository.
+/PROJECT-CONTEXT.md
